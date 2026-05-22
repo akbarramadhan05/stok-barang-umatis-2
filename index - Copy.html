@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stokbar Umatis</title>
+  <script>
+    const session = sessionStorage.getItem("stokbar_session");
+    window.location.replace(session ? "dashboard.html" : "login.html");
+  </script>
+</head>
+<body>
+  <p class="page-loading">Memuat Stokbar Umatis...</p>
+</body>
+</html>

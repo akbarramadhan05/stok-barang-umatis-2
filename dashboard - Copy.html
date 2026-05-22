@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard — Stokbar Umatis</title>
+  <link rel="stylesheet" href="css/variables.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/components.css" />
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <main class="main-content">
+      <header class="top-header">
+        <div class="header-left">
+          <button type="button" class="menu-toggle" id="menuToggle" aria-label="Menu">☰</button>
+          <h1 id="pageTitle">Dashboard</h1>
+        </div>
+        <div id="headerActions"></div>
+      </header>
+
+      <div class="page-content">
+        <div class="stats-grid" id="statsGrid"></div>
+
+        <div id="lowStockAlert"></div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <h2>Grafik Masuk / Keluar (7 hari)</h2>
+            </div>
+            <div class="card-body">
+              <div class="chart-container" id="mainChart"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h2>Stok Menipis</h2>
+              <a href="inventory.html" class="btn btn-ghost btn-sm">Lihat semua</a>
+            </div>
+            <div class="card-body">
+              <div class="low-stock-list" id="lowStockList"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:1.25rem">
+          <div class="card-header">
+            <h2>Transaksi Terbaru</h2>
+          </div>
+          <div class="card-body table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Tanggal</th>
+                  <th>Tipe</th>
+                  <th>Barang</th>
+                  <th>Jumlah</th>
+                  <th>Oleh</th>
+                </tr>
+              </thead>
+              <tbody id="recentTxBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/api-client.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/charts.js"></script>
+  <script>
+    (async () => {
+    const session = initLayout("dashboard.html", "Dashboard");
+    if (!session) return;
+    try {
+      await Promise.all([refreshInventory(), refreshTransactions({ limit: 200 })]);
+    } catch (e) { showDataError(e); return; }
+
+    function renderDashboard() {
+      const inventory = getInventory();
+      const txs = getTransactions();
+      const lowStock = getLowStockItems();
+      const today = new Date().toISOString().slice(0, 10);
+      const todayTxs = txs.filter((t) => t.date === today);
+
+      document.getElementById("statsGrid").innerHTML = `
+        <div class="stat-card">
+          <div class="stat-icon teal">📦</div>
+          <div>
+            <div class="stat-value">${inventory.length}</div>
+            <div class="stat-label">Total Item</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon mint">📥</div>
+          <div>
+            <div class="stat-value">${todayTxs.filter((t) => t.type === "in").length}</div>
+            <div class="stat-label">Masuk Hari Ini</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon orange">📤</div>
+          <div>
+            <div class="stat-value">${todayTxs.filter((t) => t.type === "out").length}</div>
+            <div class="stat-label">Keluar Hari Ini</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon danger">⚠️</div>
+          <div>
+            <div class="stat-value">${lowStock.length}</div>
+            <div class="stat-label">Stok Menipis</div>
+          </div>
+        </div>
+      `;
+
+      if (lowStock.length > 0) {
+        document.getElementById("lowStockAlert").innerHTML = `
+          <div class="alert alert-warning">
+            <span>⚠️</span>
+            <div><strong>${lowStock.length} barang</strong> stoknya menipis atau di bawah minimum. Segera restok atau hubungi supplier.</div>
+          </div>
+        `;
+      } else {
+        document.getElementById("lowStockAlert").innerHTML = `
+          <div class="alert alert-success"><span>✅</span><div>Semua stok dalam kondisi aman.</div></div>
+        `;
+      }
+
+      const listEl = document.getElementById("lowStockList");
+      if (lowStock.length === 0) {
+        listEl.innerHTML = '<p style="color:var(--color-text-muted);font-size:0.875rem">Tidak ada barang dengan stok menipis.</p>';
+      } else {
+        listEl.innerHTML = lowStock
+          .slice(0, 6)
+          .map(
+            (i) => `
+          <div class="low-stock-item">
+            <span><strong>${escapeHtml(i.name)}</strong> <small>(${escapeHtml(i.category)})</small></span>
+            <span class="badge badge-warning">${formatStock(i.stock, i.unit)}</span>
+          </div>`
+          )
+          .join("");
+      }
+
+      renderInOutChart("mainChart");
+
+      const recent = txs.slice(0, 8);
+      document.getElementById("recentTxBody").innerHTML =
+        recent.length === 0
+          ? '<tr><td colspan="5" style="text-align:center;color:var(--color-text-muted)">Belum ada transaksi</td></tr>'
+          : recent
+              .map(
+                (t) => `
+          <tr>
+            <td>${formatDate(t.date)}</td>
+            <td><span class="badge ${t.type === "in" ? "badge-success" : "badge-warning"}">${t.type === "in" ? "Masuk" : "Keluar"}</span></td>
+            <td>${escapeHtml(t.itemName)}</td>
+            <td>${t.quantity} ${escapeHtml(t.unit)}</td>
+            <td>${escapeHtml(t.userName)}</td>
+          </tr>`
+              )
+              .join("");
+
+      const actions = document.getElementById("headerActions");
+      if (canTransact()) {
+        actions.innerHTML = `
+          <a href="transaction-in.html" class="btn btn-primary btn-sm">+ Masuk</a>
+          <a href="transaction-out.html" class="btn btn-secondary btn-sm">− Keluar</a>
+        `;
+      }
+    }
+
+    renderDashboard();
+    })();
+  </script>
+</body>
+</html>

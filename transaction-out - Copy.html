@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Barang Keluar — Stokbar Umatis</title>
+  <link rel="stylesheet" href="css/variables.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/components.css" />
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <main class="main-content">
+      <header class="top-header">
+        <div class="header-left">
+          <button type="button" class="menu-toggle" id="menuToggle" aria-label="Menu">☰</button>
+          <h1 id="pageTitle">Barang Keluar</h1>
+        </div>
+      </header>
+
+      <div class="page-content">
+        <div class="alert alert-warning">
+          <span>📤</span>
+          <div>Catat barang yang digunakan atau habis di operasional harian. Stok akan otomatis berkurang.</div>
+        </div>
+
+        <div class="card quick-form-card">
+          <div class="card-header">
+            <h2>Form Input Barang Keluar</h2>
+          </div>
+          <div class="card-body">
+            <form id="txOutForm">
+              <div class="form-group">
+                <label class="form-label">Pilih Barang</label>
+                <div class="item-picker" id="itemPicker"></div>
+                <input type="hidden" id="selectedItemId" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="quantity">Jumlah Keluar</label>
+                <input class="form-input" type="number" id="quantity" min="0.01" step="0.01" placeholder="Contoh: 2" required />
+                <p class="form-hint" id="unitHint">Pilih barang — stok tersedia akan ditampilkan</p>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="note">Catatan (opsional)</label>
+                <textarea class="form-textarea" id="note" placeholder="Misal: Operasional shift pagi, waste, dll."></textarea>
+              </div>
+              <div class="form-actions">
+                <button type="submit" class="btn btn-primary btn-lg" style="background:linear-gradient(135deg,#fb923c,#ea580c)">Simpan Barang Keluar</button>
+                <a href="dashboard.html" class="btn btn-secondary">Batal</a>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:1.25rem">
+          <div class="card-header"><h2>Riwayat Keluar Hari Ini</h2></div>
+          <div class="card-body table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr><th>Waktu</th><th>Barang</th><th>Jumlah</th><th>Catatan</th></tr>
+              </thead>
+              <tbody id="todayOutBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/api-client.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    (async () => {
+    const session = initLayout("transaction-out.html", "Barang Keluar");
+    if (!session) return;
+    let selectedId = null;
+    const today = new Date().toISOString().slice(0, 10);
+
+    try {
+      await refreshInventory();
+      await refreshTransactions({ type: "out", date: today });
+    } catch (e) { showDataError(e); return; }
+
+    function renderPicker() {
+      const items = getInventory();
+      document.getElementById("itemPicker").innerHTML = items
+        .map((i) => {
+          const low = i.stock <= i.minStock;
+          return `
+        <div class="item-option ${selectedId === i.id ? "selected" : ""}" data-id="${i.id}" data-unit="${i.unit}" data-stock="${i.stock}">
+          <span><strong>${escapeHtml(i.name)}</strong><br><small>${escapeHtml(i.category)}</small></span>
+          <span class="stock-qty ${low ? "badge badge-warning" : ""}">Stok: ${formatStock(i.stock, i.unit)}</span>
+        </div>`;
+        })
+        .join("");
+
+      document.querySelectorAll(".item-option").forEach((el) => {
+        el.addEventListener("click", () => {
+          document.querySelectorAll(".item-option").forEach((o) => o.classList.remove("selected"));
+          el.classList.add("selected");
+          selectedId = el.dataset.id;
+          document.getElementById("selectedItemId").value = selectedId;
+          document.getElementById("unitHint").textContent = `Tersedia: ${el.dataset.stock} ${el.dataset.unit}`;
+          document.getElementById("quantity").max = el.dataset.stock;
+        });
+      });
+    }
+
+    function renderToday() {
+      const txs = getTransactions();
+      document.getElementById("todayOutBody").innerHTML =
+        txs.length === 0
+          ? '<tr><td colspan="4" style="text-align:center;color:var(--color-text-muted)">Belum ada input hari ini</td></tr>'
+          : txs
+              .map(
+                (t) => `<tr>
+            <td>${formatDateTime(t.createdAt)}</td>
+            <td>${escapeHtml(t.itemName)}</td>
+            <td>${t.quantity} ${escapeHtml(t.unit)}</td>
+            <td>${escapeHtml(t.note || "-")}</td>
+          </tr>`
+              )
+              .join("");
+    }
+
+    document.getElementById("txOutForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      try {
+        await addTransaction({
+          type: "out",
+          itemId: document.getElementById("selectedItemId").value,
+          quantity: document.getElementById("quantity").value,
+          note: document.getElementById("note").value,
+          user: session,
+        });
+        showToast("Barang keluar berhasil dicatat!");
+        document.getElementById("txOutForm").reset();
+        selectedId = null;
+        await refreshTransactions({ type: "out", date: today });
+        renderPicker();
+        renderToday();
+      } catch (err) {
+        showToast(err.message, "error");
+      }
+    });
+
+    renderPicker();
+    renderToday();
+    })();
+  </script>
+</body>
+</html>

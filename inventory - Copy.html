@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stok Barang — Stokbar Umatis</title>
+  <link rel="stylesheet" href="css/variables.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/components.css" />
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <main class="main-content">
+      <header class="top-header">
+        <div class="header-left">
+          <button type="button" class="menu-toggle" id="menuToggle" aria-label="Menu">☰</button>
+          <h1 id="pageTitle">Stok Barang</h1>
+        </div>
+        <div id="headerActions"></div>
+      </header>
+
+      <div class="page-content">
+        <div class="search-bar">
+          <div class="search-input-wrap">
+            <input type="search" id="searchInput" placeholder="Cari nama barang..." />
+          </div>
+          <select class="filter-select" id="categoryFilter">
+            <option value="">Semua Kategori</option>
+          </select>
+        </div>
+
+        <div class="card">
+          <div class="card-body table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Nama Barang</th>
+                  <th>Kategori</th>
+                  <th>Stok</th>
+                  <th>Min. Stok</th>
+                  <th>Status</th>
+                  <th id="actionCol" style="display:none">Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="inventoryBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div class="modal-overlay" id="itemModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="modalTitle">Tambah Barang</h2>
+        <button type="button" class="btn btn-ghost btn-icon" data-close-modal="itemModal">✕</button>
+      </div>
+      <form id="itemForm">
+        <div class="modal-body">
+          <input type="hidden" id="itemId" />
+          <div class="form-group">
+            <label class="form-label" for="itemName">Nama Barang</label>
+            <input class="form-input" id="itemName" required />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="itemCategory">Kategori</label>
+              <select class="form-select" id="itemCategory" required></select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="itemUnit">Satuan</label>
+              <select class="form-select" id="itemUnit" required>
+                <option value="kg">kg</option>
+                <option value="liter">liter</option>
+                <option value="pcs">pcs</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="itemStock">Stok Saat Ini</label>
+              <input class="form-input" type="number" id="itemStock" min="0" step="0.1" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="itemMinStock">Stok Minimum</label>
+              <input class="form-input" type="number" id="itemMinStock" min="0" step="0.1" required />
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost" data-close-modal="itemModal">Batal</button>
+          <button type="submit" class="btn btn-primary">Simpan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/api-client.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    (async () => {
+    const session = initLayout("inventory.html", "Stok Barang");
+    if (!session) return;
+    try { await refreshInventory(); } catch (e) { showDataError(e); return; }
+
+    const categoryFilter = document.getElementById("categoryFilter");
+    CATEGORIES.forEach((c) => {
+      categoryFilter.innerHTML += `<option value="${c}">${c}</option>`;
+      document.getElementById("itemCategory").innerHTML += `<option value="${c}">${c}</option>`;
+    });
+
+    if (canEdit()) {
+      document.getElementById("actionCol").style.display = "";
+      document.getElementById("headerActions").innerHTML =
+        '<button type="button" class="btn btn-primary btn-sm" id="btnAddItem">+ Tambah Barang</button>';
+      document.getElementById("btnAddItem").addEventListener("click", () => openItemModal());
+    }
+
+    function statusLabel(item) {
+      const b = getStockBadge(item);
+      const map = { success: ["Aman", "badge-success"], warning: ["Menipis", "badge-warning"], danger: ["Kritis", "badge-danger"] };
+      const [text, cls] = map[b];
+      return `<span class="badge ${cls}">${text}</span>`;
+    }
+
+    function renderTable() {
+      const q = document.getElementById("searchInput").value.toLowerCase();
+      const cat = categoryFilter.value;
+      let items = getInventory().filter((i) => {
+        const matchQ = i.name.toLowerCase().includes(q);
+        const matchC = !cat || i.category === cat;
+        return matchQ && matchC;
+      });
+
+      const tbody = document.getElementById("inventoryBody");
+      tbody.innerHTML = items
+        .map((i) => {
+          const actions = canEdit()
+            ? `<td>
+              <button type="button" class="btn btn-ghost btn-sm" data-edit="${i.id}">Edit</button>
+              <button type="button" class="btn btn-danger btn-sm" data-del="${i.id}">Hapus</button>
+            </td>`
+            : "";
+          return `<tr>
+            <td><strong>${escapeHtml(i.name)}</strong></td>
+            <td>${escapeHtml(i.category)}</td>
+            <td>${formatStock(i.stock, i.unit)}</td>
+            <td>${formatStock(i.minStock, i.unit)}</td>
+            <td>${statusLabel(i)}</td>
+            ${canEdit() ? actions : ""}
+          </tr>`;
+        })
+        .join("");
+
+      tbody.querySelectorAll("[data-edit]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const item = getItemById(btn.dataset.edit);
+          openItemModal(item);
+        });
+      });
+      tbody.querySelectorAll("[data-del]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          if (!confirm("Hapus barang ini?")) return;
+          try {
+            await deleteInventoryItem(btn.dataset.del);
+            showToast("Barang dihapus");
+            renderTable();
+          } catch (e) { showToast(e.message, "error"); }
+        });
+      });
+    }
+
+    function openItemModal(item) {
+      document.getElementById("modalTitle").textContent = item ? "Edit Barang" : "Tambah Barang";
+      document.getElementById("itemId").value = item?.id || "";
+      document.getElementById("itemName").value = item?.name || "";
+      document.getElementById("itemCategory").value = item?.category || CATEGORIES[0];
+      document.getElementById("itemUnit").value = item?.unit || "kg";
+      document.getElementById("itemStock").value = item?.stock ?? 0;
+      document.getElementById("itemMinStock").value = item?.minStock ?? 1;
+      openModal("itemModal");
+    }
+
+    document.getElementById("itemForm")?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const id = document.getElementById("itemId").value;
+      const data = {
+        id: id || undefined,
+        name: document.getElementById("itemName").value.trim(),
+        category: document.getElementById("itemCategory").value,
+        unit: document.getElementById("itemUnit").value,
+        stock: parseFloat(document.getElementById("itemStock").value),
+        minStock: parseFloat(document.getElementById("itemMinStock").value),
+      };
+      try {
+        await saveInventoryItem(data);
+        closeModal("itemModal");
+        showToast("Data barang disimpan");
+        renderTable();
+      } catch (err) { showToast(err.message, "error"); }
+    });
+
+    document.getElementById("searchInput").addEventListener("input", renderTable);
+    categoryFilter.addEventListener("change", renderTable);
+    renderTable();
+    })();
+  </script>
+</body>
+</html>

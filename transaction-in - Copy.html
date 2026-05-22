@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Barang Masuk — Stokbar Umatis</title>
+  <link rel="stylesheet" href="css/variables.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/components.css" />
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <main class="main-content">
+      <header class="top-header">
+        <div class="header-left">
+          <button type="button" class="menu-toggle" id="menuToggle" aria-label="Menu">☰</button>
+          <h1 id="pageTitle">Barang Masuk</h1>
+        </div>
+      </header>
+
+      <div class="page-content">
+        <div class="alert alert-info">
+          <span>📥</span>
+          <div>Catat barang yang baru datang dari supplier. Stok akan otomatis bertambah.</div>
+        </div>
+
+        <div class="card quick-form-card">
+          <div class="card-header">
+            <h2>Form Input Barang Masuk</h2>
+          </div>
+          <div class="card-body">
+            <form id="txInForm">
+              <div class="form-group">
+                <label class="form-label">Pilih Barang</label>
+                <div class="item-picker" id="itemPicker"></div>
+                <input type="hidden" id="selectedItemId" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="quantity">Jumlah Masuk</label>
+                <input class="form-input" type="number" id="quantity" min="0.01" step="0.01" placeholder="Contoh: 5" required />
+                <p class="form-hint" id="unitHint">Pilih barang terlebih dahulu</p>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="note">Catatan (opsional)</label>
+                <textarea class="form-textarea" id="note" placeholder="Misal: PO #123, supplier Kopi Nusantara"></textarea>
+              </div>
+              <div class="form-actions">
+                <button type="submit" class="btn btn-primary btn-lg">Simpan Barang Masuk</button>
+                <a href="dashboard.html" class="btn btn-secondary">Batal</a>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:1.25rem">
+          <div class="card-header"><h2>Riwayat Masuk Hari Ini</h2></div>
+          <div class="card-body table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr><th>Waktu</th><th>Barang</th><th>Jumlah</th><th>Catatan</th></tr>
+              </thead>
+              <tbody id="todayInBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/api-client.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    (async () => {
+    const session = initLayout("transaction-in.html", "Barang Masuk");
+    if (!session) return;
+    let selectedId = null;
+    const today = new Date().toISOString().slice(0, 10);
+
+    try {
+      await refreshInventory();
+      await refreshTransactions({ type: "in", date: today });
+    } catch (e) { showDataError(e); return; }
+
+    function renderPicker() {
+      const items = getInventory();
+      document.getElementById("itemPicker").innerHTML = items
+        .map(
+          (i) => `
+        <div class="item-option ${selectedId === i.id ? "selected" : ""}" data-id="${i.id}" data-unit="${i.unit}">
+          <span><strong>${escapeHtml(i.name)}</strong><br><small>${escapeHtml(i.category)}</small></span>
+          <span class="stock-qty">Stok: ${formatStock(i.stock, i.unit)}</span>
+        </div>`
+        )
+        .join("");
+
+      document.querySelectorAll(".item-option").forEach((el) => {
+        el.addEventListener("click", () => {
+          document.querySelectorAll(".item-option").forEach((o) => o.classList.remove("selected"));
+          el.classList.add("selected");
+          selectedId = el.dataset.id;
+          document.getElementById("selectedItemId").value = selectedId;
+          document.getElementById("unitHint").textContent = `Satuan: ${el.dataset.unit}`;
+        });
+      });
+    }
+
+    function renderToday() {
+      const txs = getTransactions();
+      document.getElementById("todayInBody").innerHTML =
+        txs.length === 0
+          ? '<tr><td colspan="4" style="text-align:center;color:var(--color-text-muted)">Belum ada input hari ini</td></tr>'
+          : txs
+              .map(
+                (t) => `<tr>
+            <td>${formatDateTime(t.createdAt)}</td>
+            <td>${escapeHtml(t.itemName)}</td>
+            <td>${t.quantity} ${escapeHtml(t.unit)}</td>
+            <td>${escapeHtml(t.note || "-")}</td>
+          </tr>`
+              )
+              .join("");
+    }
+
+    document.getElementById("txInForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      try {
+        await addTransaction({
+          type: "in",
+          itemId: document.getElementById("selectedItemId").value,
+          quantity: document.getElementById("quantity").value,
+          note: document.getElementById("note").value,
+          user: session,
+        });
+        showToast("Barang masuk berhasil dicatat!");
+        document.getElementById("txInForm").reset();
+        selectedId = null;
+        await refreshTransactions({ type: "in", date: today });
+        renderPicker();
+        renderToday();
+      } catch (err) {
+        showToast(err.message, "error");
+      }
+    });
+
+    renderPicker();
+    renderToday();
+    })();
+  </script>
+</body>
+</html>

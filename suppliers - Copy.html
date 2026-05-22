@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Data Supplier — Stokbar Umatis</title>
+  <link rel="stylesheet" href="css/variables.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/components.css" />
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <main class="main-content">
+      <header class="top-header">
+        <div class="header-left">
+          <button type="button" class="menu-toggle" id="menuToggle" aria-label="Menu">☰</button>
+          <h1 id="pageTitle">Data Supplier</h1>
+        </div>
+        <div id="headerActions"></div>
+      </header>
+
+      <div class="page-content">
+        <div class="alert alert-info" style="margin-bottom:1.25rem">
+          <span>📞</span>
+          <div>Hubungi supplier langsung via WhatsApp atau Email saat stok menipis. Klik tombol kontak di setiap kartu.</div>
+        </div>
+
+        <div class="search-bar">
+          <div class="search-input-wrap">
+            <input type="search" id="searchSupplier" placeholder="Cari nama supplier atau kategori..." />
+          </div>
+        </div>
+
+        <div class="supplier-grid" id="supplierGrid"></div>
+      </div>
+    </main>
+  </div>
+
+  <div class="modal-overlay" id="supplierModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="supplierModalTitle">Tambah Supplier</h2>
+        <button type="button" class="btn btn-ghost btn-icon" data-close-modal="supplierModal">✕</button>
+      </div>
+      <form id="supplierForm">
+        <div class="modal-body">
+          <input type="hidden" id="supplierId" />
+          <div class="form-group">
+            <label class="form-label" for="supName">Nama Supplier</label>
+            <input class="form-input" id="supName" required />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="supPhone">No. WhatsApp / Telepon</label>
+              <input class="form-input" id="supPhone" placeholder="62812..." required />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="supEmail">Email</label>
+              <input class="form-input" type="email" id="supEmail" required />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="supAddress">Alamat</label>
+            <textarea class="form-textarea" id="supAddress"></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="supCategories">Kategori Barang (pisah koma)</label>
+            <input class="form-input" id="supCategories" placeholder="Biji Kopi, Susu" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="supNotes">Catatan</label>
+            <input class="form-input" id="supNotes" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost" data-close-modal="supplierModal">Batal</button>
+          <button type="submit" class="btn btn-primary">Simpan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/api-client.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    (async () => {
+    const session = initLayout("suppliers.html", "Data Supplier");
+    if (!session) return;
+    try {
+      await Promise.all([refreshSuppliers(), refreshInventory()]);
+    } catch (e) { showDataError(e); return; }
+
+    if (canEdit()) {
+      document.getElementById("headerActions").innerHTML =
+        '<button type="button" class="btn btn-primary btn-sm" id="btnAddSupplier">+ Tambah Supplier</button>';
+      document.getElementById("btnAddSupplier").addEventListener("click", () => openSupplierModal());
+    }
+
+    function renderSuppliers() {
+      const q = document.getElementById("searchSupplier").value.toLowerCase();
+      const suppliers = getSuppliers().filter(
+        (s) =>
+          s.name.toLowerCase().includes(q) ||
+          s.categories.some((c) => c.toLowerCase().includes(q))
+      );
+
+      const grid = document.getElementById("supplierGrid");
+      if (suppliers.length === 0) {
+        grid.innerHTML = '<p style="color:var(--color-text-muted)">Tidak ada supplier ditemukan.</p>';
+        return;
+      }
+
+      const lowItems = getLowStockItems().map((i) => i.category);
+      const waMsg = (name) =>
+        `Halo ${name}, kami dari Stokbar Umatis. Beberapa stok kami menipis dan ingin menanyakan ketersediaan barang. Terima kasih!`;
+
+      grid.innerHTML = suppliers
+        .map((s) => {
+          const cats = s.categories
+            .map((c) => {
+              const urgent = lowItems.includes(c);
+              return `<span class="badge ${urgent ? "badge-danger" : "badge-info"}">${escapeHtml(c)}${urgent ? " ⚠" : ""}</span>`;
+            })
+            .join("");
+          const adminBtns = canEdit()
+            ? `<div style="margin-top:1rem;display:flex;gap:0.5rem">
+              <button type="button" class="btn btn-ghost btn-sm" data-edit-sup="${s.id}">Edit</button>
+              <button type="button" class="btn btn-danger btn-sm" data-del-sup="${s.id}">Hapus</button>
+            </div>`
+            : "";
+          return `
+        <article class="supplier-card">
+          <h3>${escapeHtml(s.name)}</h3>
+          <p style="font-size:0.8rem;color:var(--color-text-muted)">📍 ${escapeHtml(s.address || "-")}</p>
+          <div class="supplier-categories">${cats}</div>
+          ${s.notes ? `<p style="font-size:0.8rem;color:var(--color-text-secondary)">📝 ${escapeHtml(s.notes)}</p>` : ""}
+          <div class="supplier-contact">
+            <a class="contact-link wa" href="${waLink(s.phone, waMsg(s.name))}" target="_blank" rel="noopener">
+              💬 WhatsApp: ${escapeHtml(s.phone)}
+            </a>
+            <a class="contact-link" href="mailto:${encodeURIComponent(s.email)}">
+              ✉️ ${escapeHtml(s.email)}
+            </a>
+            <a class="contact-link" href="tel:${s.phone}">
+              📞 Telepon
+            </a>
+          </div>
+          ${adminBtns}
+        </article>`;
+        })
+        .join("");
+
+      if (canEdit()) {
+        grid.querySelectorAll("[data-edit-sup]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const s = getSuppliers().find((x) => x.id === btn.dataset.editSup);
+            openSupplierModal(s);
+          });
+        });
+        grid.querySelectorAll("[data-del-sup]").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            if (!confirm("Hapus supplier ini?")) return;
+            try {
+              await deleteSupplierItem(btn.dataset.delSup);
+              showToast("Supplier dihapus");
+              renderSuppliers();
+            } catch (err) { showToast(err.message, "error"); }
+          });
+        });
+      }
+    }
+
+    function openSupplierModal(s) {
+      document.getElementById("supplierModalTitle").textContent = s ? "Edit Supplier" : "Tambah Supplier";
+      document.getElementById("supplierId").value = s?.id || "";
+      document.getElementById("supName").value = s?.name || "";
+      document.getElementById("supPhone").value = s?.phone || "";
+      document.getElementById("supEmail").value = s?.email || "";
+      document.getElementById("supAddress").value = s?.address || "";
+      document.getElementById("supCategories").value = s?.categories?.join(", ") || "";
+      document.getElementById("supNotes").value = s?.notes || "";
+      openModal("supplierModal");
+    }
+
+    document.getElementById("supplierForm")?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const id = document.getElementById("supplierId").value;
+      const data = {
+        id: id || undefined,
+        name: document.getElementById("supName").value.trim(),
+        phone: document.getElementById("supPhone").value.trim(),
+        email: document.getElementById("supEmail").value.trim(),
+        address: document.getElementById("supAddress").value.trim(),
+        categories: document
+          .getElementById("supCategories")
+          .value.split(",")
+          .map((c) => c.trim())
+          .filter(Boolean),
+        notes: document.getElementById("supNotes").value.trim(),
+      };
+      try {
+        await saveSupplierItem(data);
+        closeModal("supplierModal");
+        showToast("Data supplier disimpan");
+        renderSuppliers();
+      } catch (err) { showToast(err.message, "error"); }
+    });
+
+    document.getElementById("searchSupplier").addEventListener("input", renderSuppliers);
+    renderSuppliers();
+    })();
+  </script>
+</body>
+</html>

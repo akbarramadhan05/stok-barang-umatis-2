@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manajemen User — Stokbar Umatis</title>
+  <link rel="stylesheet" href="css/variables.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/components.css" />
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <main class="main-content">
+      <header class="top-header">
+        <div class="header-left">
+          <button type="button" class="menu-toggle" id="menuToggle" aria-label="Menu">☰</button>
+          <h1 id="pageTitle">Manajemen User</h1>
+        </div>
+        <button type="button" class="btn btn-primary btn-sm" id="btnAddUser">+ Tambah User</button>
+      </header>
+
+      <div class="page-content">
+        <div class="card">
+          <div class="card-body table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Nama</th>
+                  <th>Username</th>
+                  <th>Role</th>
+                  <th>Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="usersBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div class="modal-overlay" id="userModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="userModalTitle">Tambah User</h2>
+        <button type="button" class="btn btn-ghost btn-icon" data-close-modal="userModal">✕</button>
+      </div>
+      <form id="userForm">
+        <div class="modal-body">
+          <input type="hidden" id="userId" />
+          <div class="form-group">
+            <label class="form-label" for="userName">Nama Lengkap</label>
+            <input class="form-input" id="userName" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="userUsername">Username</label>
+            <input class="form-input" id="userUsername" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="userPassword">Password</label>
+            <input class="form-input" type="password" id="userPassword" />
+            <p class="form-hint" id="passHint">Kosongkan jika tidak ingin mengubah password (saat edit)</p>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="userRole">Role</label>
+            <select class="form-select" id="userRole" required>
+              <option value="admin">Admin — Akses penuh</option>
+              <option value="owner">Owner — Read-only laporan</option>
+              <option value="barista">Tim Barista — Input masuk/keluar</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost" data-close-modal="userModal">Batal</button>
+          <button type="submit" class="btn btn-primary">Simpan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/api-client.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    (async () => {
+    const session = initLayout("users.html", "Manajemen User");
+    if (!session) return;
+    try { await refreshUsers(); } catch (e) { showDataError(e); return; }
+
+    function renderUsers() {
+      document.getElementById("usersBody").innerHTML = getUsers()
+        .map(
+          (u) => `
+        <tr>
+          <td><strong>${escapeHtml(u.name)}</strong></td>
+          <td>${escapeHtml(u.username)}</td>
+          <td><span class="badge ${roleBadgeClass(u.role)}">${ROLE_LABELS[u.role]}</span></td>
+          <td>
+            <button type="button" class="btn btn-ghost btn-sm" data-edit-user="${u.id}">Edit</button>
+          </td>
+        </tr>`
+        )
+        .join("");
+
+      document.querySelectorAll("[data-edit-user]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const u = getUsers().find((x) => x.id === btn.dataset.editUser);
+          openUserModal(u);
+        });
+      });
+    }
+
+    function openUserModal(u) {
+      document.getElementById("userModalTitle").textContent = u ? "Edit User" : "Tambah User";
+      document.getElementById("userId").value = u?.id || "";
+      document.getElementById("userName").value = u?.name || "";
+      document.getElementById("userUsername").value = u?.username || "";
+      document.getElementById("userPassword").value = "";
+      document.getElementById("userPassword").required = !u;
+      document.getElementById("userRole").value = u?.role || "barista";
+      openModal("userModal");
+    }
+
+    document.getElementById("btnAddUser").addEventListener("click", () => openUserModal());
+    document.getElementById("userForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const id = document.getElementById("userId").value;
+      const name = document.getElementById("userName").value.trim();
+      const username = document.getElementById("userUsername").value.trim();
+      const password = document.getElementById("userPassword").value;
+      const role = document.getElementById("userRole").value;
+
+      if (!id && !password) {
+        showToast("Password wajib diisi", "error");
+        return;
+      }
+      try {
+        await saveUserItem({ id: id || undefined, name, username, password, role });
+        closeModal("userModal");
+        showToast("User disimpan");
+        renderUsers();
+      } catch (err) { showToast(err.message, "error"); }
+    });
+
+    renderUsers();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Laporan — Stokbar Umatis</title>
+  <link rel="stylesheet" href="css/variables.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/components.css" />
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <main class="main-content">
+      <header class="top-header">
+        <div class="header-left">
+          <button type="button" class="menu-toggle" id="menuToggle" aria-label="Menu">☰</button>
+          <h1 id="pageTitle">Laporan</h1>
+        </div>
+      </header>
+
+      <div class="page-content">
+        <div class="stats-grid" id="reportStats"></div>
+
+        <div class="card" style="margin-bottom:1.25rem">
+          <div class="card-header"><h2>Grafik Transaksi 7 Hari</h2></div>
+          <div class="card-body">
+            <div class="chart-container" id="reportChart"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2>Riwayat Barang Masuk & Keluar</h2>
+            <select class="filter-select" id="txTypeFilter">
+              <option value="">Semua</option>
+              <option value="in">Masuk</option>
+              <option value="out">Keluar</option>
+            </select>
+          </div>
+          <div class="card-body table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Tanggal</th>
+                  <th>Tipe</th>
+                  <th>Barang</th>
+                  <th>Jumlah</th>
+                  <th>Catatan</th>
+                  <th>Pengguna</th>
+                </tr>
+              </thead>
+              <tbody id="reportTxBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/api-client.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/charts.js"></script>
+  <script>
+    (async () => {
+    const session = initLayout("reports.html", "Laporan");
+    if (!session) return;
+    try { await refreshTransactions({ limit: 500 }); } catch (e) { showDataError(e); return; }
+
+    function renderReports() {
+      const txs = getTransactions();
+      const totalIn = txs.filter((t) => t.type === "in").reduce((s, t) => s + t.quantity, 0);
+      const totalOut = txs.filter((t) => t.type === "out").reduce((s, t) => s + t.quantity, 0);
+
+      document.getElementById("reportStats").innerHTML = `
+        <div class="stat-card">
+          <div class="stat-icon teal">📥</div>
+          <div><div class="stat-value">${txs.filter((t) => t.type === "in").length}</div><div class="stat-label">Total Transaksi Masuk</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon orange">📤</div>
+          <div><div class="stat-value">${txs.filter((t) => t.type === "out").length}</div><div class="stat-label">Total Transaksi Keluar</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon mint">Σ</div>
+          <div><div class="stat-value">${totalIn.toFixed(0)}</div><div class="stat-label">Akumulasi Qty Masuk</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon danger">Σ</div>
+          <div><div class="stat-value">${totalOut.toFixed(0)}</div><div class="stat-label">Akumulasi Qty Keluar</div></div>
+        </div>
+      `;
+
+      renderInOutChart("reportChart");
+
+      const filter = document.getElementById("txTypeFilter").value;
+      let filtered = txs;
+      if (filter) filtered = txs.filter((t) => t.type === filter);
+
+      document.getElementById("reportTxBody").innerHTML = filtered
+        .slice(0, 50)
+        .map(
+          (t) => `
+        <tr>
+          <td>${formatDate(t.date)}</td>
+          <td><span class="badge ${t.type === "in" ? "badge-success" : "badge-warning"}">${t.type === "in" ? "Masuk" : "Keluar"}</span></td>
+          <td>${escapeHtml(t.itemName)}</td>
+          <td>${t.quantity} ${escapeHtml(t.unit)}</td>
+          <td>${escapeHtml(t.note || "-")}</td>
+          <td>${escapeHtml(t.userName)}</td>
+        </tr>`
+        )
+        .join("");
+    }
+
+    document.getElementById("txTypeFilter").addEventListener("change", renderReports);
+    renderReports();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Katalog Barang — Stokbar Umatis</title>
+  <link rel="icon" href="assets/logo.png" type="image/png" />
+  <link rel="stylesheet" href="css/variables.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/components.css" />
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <main class="main-content">
+      <header class="top-header">
+        <div class="header-left">
+          <button type="button" class="menu-toggle" id="menuToggle" aria-label="Menu">☰</button>
+          <h1 id="pageTitle">Katalog Barang</h1>
+        </div>
+        <div id="headerActions"></div>
+      </header>
+
+      <div class="page-content">
+        <div class="alert alert-info">
+          <span>📋</span>
+          <div>Katalog berisi daftar produk kafe. Admin dapat menambah & mengedit. Stok awal bisa diisi saat tambah barang.</div>
+        </div>
+
+        <div class="search-bar">
+          <div class="search-input-wrap">
+            <input type="search" id="searchKatalog" placeholder="Cari SKU, nama, kategori..." />
+          </div>
+          <select class="filter-select" id="categoryFilter"></select>
+        </div>
+
+        <div class="supplier-grid" id="katalogGrid"></div>
+      </div>
+    </main>
+  </div>
+
+  <div class="modal-overlay" id="katalogModal">
+    <div class="modal" style="max-width:520px">
+      <div class="modal-header">
+        <h2 id="katalogModalTitle">Tambah Katalog Barang</h2>
+        <button type="button" class="btn btn-ghost btn-icon" data-close-modal="katalogModal">✕</button>
+      </div>
+      <form id="katalogForm">
+        <div class="modal-body">
+          <input type="hidden" id="katalogId" />
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="katalogSku">SKU / Kode</label>
+              <input class="form-input" id="katalogSku" placeholder="Contoh: KOP-011" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="katalogName">Nama Barang *</label>
+              <input class="form-input" id="katalogName" required />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="katalogCategory">Kategori *</label>
+              <select class="form-select" id="katalogCategory" required></select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="katalogUnit">Satuan *</label>
+              <select class="form-select" id="katalogUnit" required>
+                <option value="kg">kg</option>
+                <option value="liter">liter</option>
+                <option value="pcs">pcs</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="katalogDesc">Deskripsi</label>
+            <textarea class="form-textarea" id="katalogDesc" placeholder="Keterangan produk untuk tim barista"></textarea>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="katalogStock">Stok Awal</label>
+              <input class="form-input" type="number" id="katalogStock" min="0" step="0.01" value="0" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="katalogMin">Stok Minimum</label>
+              <input class="form-input" type="number" id="katalogMin" min="0" step="0.01" value="1" />
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost" data-close-modal="katalogModal">Batal</button>
+          <button type="submit" class="btn btn-primary">Simpan Katalog</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/supabase-init.js"></script>
+  <script src="js/api-client.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    (async () => {
+      const session = initLayout("katalog.html", "Katalog Barang");
+      if (!session) return;
+      try { await refreshInventory(); } catch (e) { showDataError(e); return; }
+
+      const catFilter = document.getElementById("categoryFilter");
+      catFilter.innerHTML = '<option value="">Semua Kategori</option>';
+      const catSelect = document.getElementById("katalogCategory");
+      CATEGORIES.forEach((c) => {
+        catFilter.innerHTML += `<option value="${c}">${c}</option>`;
+        catSelect.innerHTML += `<option value="${c}">${c}</option>`;
+      });
+
+      if (canEditCatalog()) {
+        document.getElementById("headerActions").innerHTML =
+          '<button type="button" class="btn btn-primary btn-sm" id="btnAddKatalog">+ Tambah Katalog</button>';
+        document.getElementById("btnAddKatalog").addEventListener("click", () => openKatalogModal());
+      }
+
+      function renderKatalog() {
+        const q = document.getElementById("searchKatalog").value.toLowerCase();
+        const cat = catFilter.value;
+        const items = getInventory().filter((i) => {
+          const text = `${i.sku} ${i.name} ${i.category} ${i.description}`.toLowerCase();
+          return text.includes(q) && (!cat || i.category === cat);
+        });
+
+        const grid = document.getElementById("katalogGrid");
+        if (!items.length) {
+          grid.innerHTML = '<p style="color:var(--color-text-muted)">Belum ada barang di katalog.</p>';
+          return;
+        }
+
+        grid.innerHTML = items
+          .map((i) => {
+            const b = getStockBadge(i);
+            const badge =
+              b === "success" ? "badge-success" : b === "warning" ? "badge-warning" : "badge-danger";
+            const status = b === "success" ? "Aman" : b === "warning" ? "Menipis" : "Kritis";
+            const editBtn = canEditCatalog()
+              ? `<button type="button" class="btn btn-ghost btn-sm" data-edit="${i.id}">Edit</button>`
+              : "";
+            return `
+          <article class="supplier-card">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:0.5rem">
+              <div>
+                <span class="badge badge-info">${escapeHtml(i.sku || "—")}</span>
+                <h3 style="margin-top:0.35rem">${escapeHtml(i.name)}</h3>
+              </div>
+              <span class="badge ${badge}">${status}</span>
+            </div>
+            <p style="font-size:0.8rem;color:var(--color-text-muted);margin:0.35rem 0">${escapeHtml(i.category)} · ${formatStock(i.stock, i.unit)}</p>
+            <p style="font-size:0.85rem;color:var(--color-text-secondary)">${escapeHtml(i.description || "Tanpa deskripsi")}</p>
+            <p style="font-size:0.75rem;color:var(--color-text-muted);margin-top:0.5rem">Min. stok: ${formatStock(i.minStock, i.unit)}</p>
+            ${editBtn}
+          </article>`;
+          })
+          .join("");
+
+        grid.querySelectorAll("[data-edit]").forEach((btn) => {
+          btn.addEventListener("click", () => openKatalogModal(getItemById(btn.dataset.edit)));
+        });
+      }
+
+      function openKatalogModal(item) {
+        document.getElementById("katalogModalTitle").textContent = item ? "Edit Katalog" : "Tambah Katalog Barang";
+        document.getElementById("katalogId").value = item?.id || "";
+        document.getElementById("katalogSku").value = item?.sku || "";
+        document.getElementById("katalogName").value = item?.name || "";
+        document.getElementById("katalogCategory").value = item?.category || CATEGORIES[0];
+        document.getElementById("katalogUnit").value = item?.unit || "kg";
+        document.getElementById("katalogDesc").value = item?.description || "";
+        document.getElementById("katalogStock").value = item?.stock ?? 0;
+        document.getElementById("katalogMin").value = item?.minStock ?? 1;
+        if (item) document.getElementById("katalogStock").disabled = false;
+        openModal("katalogModal");
+      }
+
+      document.getElementById("katalogForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        if (!canEditCatalog()) return;
+        const data = {
+          id: document.getElementById("katalogId").value || undefined,
+          sku: document.getElementById("katalogSku").value.trim(),
+          name: document.getElementById("katalogName").value.trim(),
+          category: document.getElementById("katalogCategory").value,
+          unit: document.getElementById("katalogUnit").value,
+          description: document.getElementById("katalogDesc").value.trim(),
+          stock: parseFloat(document.getElementById("katalogStock").value),
+          minStock: parseFloat(document.getElementById("katalogMin").value),
+          isActive: true,
+        };
+        try {
+          await saveInventoryItem(data);
+          closeModal("katalogModal");
+          showToast("Katalog barang disimpan");
+          renderKatalog();
+        } catch (err) {
+          showToast(err.message, "error");
+        }
+      });
+
+      document.getElementById("searchKatalog").addEventListener("input", renderKatalog);
+      catFilter.addEventListener("change", renderKatalog);
+      renderKatalog();
+    })();
+  </script>
+</body>
+</html>

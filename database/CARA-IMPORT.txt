@@ -1,0 +1,30 @@
+LOKASI FILE SQL (penting!)
+============================
+
+File schema ADA di sini:
+
+  stok-barang-umatis
+    └── database          <-- buka folder ini
+          └── schema.sql   <-- file yang di-import ke phpMyAdmin
+
+BUKAN di folder utama (bukan di samping login.html).
+
+
+CARA 1 — Import file (paling mudah)
+====================================
+1. Buka http://localhost/phpmyadmin
+2. Klik tab "Import" / "Impor" di ATAS (bukan di kiri)
+3. Choose File -> pilih schema.sql dari folder database
+4. Klik Go / Jalankan
+5. Di kiri muncul database: stokbar_umatis
+
+
+CARA 2 — Buat database dulu, lalu SQL
+======================================
+1. phpMyAdmin -> tab "Databases" / "Basis data"
+2. Nama database ketik: stokbar_umatis
+3. Klik Create / Buat
+4. Klik database stokbar_umatis di kiri
+5. Tab "SQL" -> buka file tables-only.sql -> copy semua -> paste -> Go
+
+(File tables-only.sql ada di folder database yang sama)

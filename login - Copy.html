@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Stokbar Umatis — Sistem manajemen inventaris kafe" />
+  <title>Masuk — Stokbar Umatis</title>
+  <link rel="icon" href="assets/logo.png" type="image/png" />
+  <link rel="stylesheet" href="css/variables.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/components.css" />
+</head>
+<body>
+  <div class="login-page">
+    <div class="login-card">
+      <div class="login-logo">
+        <img src="assets/logo.png" alt="Umatis Resto & Venue" class="logo-img logo-img-lg" width="160" height="auto" />
+        <h1>Stokbar Umatis</h1>
+        <p>Manajemen inventaris Restaurant — Umatis Resto & venue</p>
+      </div>
+
+      <form id="loginForm">
+        <div class="form-group">
+          <label class="form-label" for="username">Username</label>
+          <input class="form-input" type="text" id="username" name="username" placeholder="Masukkan username" required autocomplete="username" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="password">Password</label>
+          <input class="form-input" type="password" id="password" name="password" placeholder="Masukkan password" required autocomplete="current-password" />
+        </div>
+        <div id="loginError" class="alert alert-danger" style="display:none" role="alert"></div>
+        <button type="submit" class="btn btn-primary btn-lg btn-block">Masuk ke Aplikasi</button>
+      </form>
+
+      <div class="demo-accounts">
+        <h4>Akun demo — klik untuk isi otomatis</h4>
+        <button type="button" class="demo-btn" data-user="admin" data-pass="admin123">
+          <span><strong>Admin</strong> — Kelola semua data</span>
+          <span class="badge badge-role-admin">admin</span>
+        </button>
+        <button type="button" class="demo-btn" data-user="owner" data-pass="owner123">
+          <span><strong>Owner</strong> — Pantau laporan (read-only)</span>
+          <span class="badge badge-role-owner">owner</span>
+        </button>
+        <button type="button" class="demo-btn" data-user="barista" data-pass="barista123">
+          <span><strong>Barista</strong> — Input masuk/keluar & cek stok</span>
+          <span class="badge badge-role-barista">barista</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api-client.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    if (getSession()) window.location.href = "dashboard.html";
+
+    if (USE_API) {
+      apiGet("session").then((res) => {
+        if (res.loggedIn && res.user) {
+          setSession(res.user);
+          window.location.href = "dashboard.html";
+        }
+      }).catch(() => {});
+    }
+
+    document.getElementById("loginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value;
+      const errEl = document.getElementById("loginError");
+      const btn = e.target.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      try {
+        const result = await login(username, password);
+        if (result.success) {
+          if (typeof clearLegacyBrowserCache === "function") clearLegacyBrowserCache();
+          window.location.href = "dashboard.html";
+        } else {
+          errEl.textContent = result.message;
+          errEl.style.display = "flex";
+        }
+      } catch (err) {
+        errEl.textContent = err.message || "Gagal login. Pastikan XAMPP (Apache+MySQL) jalan.";
+        errEl.style.display = "flex";
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    document.querySelectorAll(".demo-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.getElementById("username").value = btn.dataset.user;
+        document.getElementById("password").value = btn.dataset.pass;
+        document.getElementById("loginError").style.display = "none";
+      });
+    });
+  </script>
+</body>
+</html>
