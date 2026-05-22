@@ -83,7 +83,7 @@ CREATE TABLE settings (
 -- ============================================================
 
 INSERT INTO users (id, username, password, name, role) VALUES
-('u1', 'admin', 'admin123', 'Budi Admin', 'admin'),
+('u1', 'admin', 'admin123', 'ratih Admin', 'admin'),
 ('u2', 'owner', 'owner123', 'Sari Owner', 'owner'),
 ('u3', 'barista', 'barista123', 'Andi Barista', 'barista');
 
