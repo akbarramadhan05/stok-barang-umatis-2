@@ -163,7 +163,7 @@ CREATE POLICY "settings_all" ON settings FOR ALL USING (true) WITH CHECK (true);
 -- Seed data
 -- ------------------------------------------------------------
 INSERT INTO users (id, username, password, name, role) VALUES
-('u1', 'admin', 'admin123', 'Budi Admin', 'admin'),
+('u1', 'admin', 'admin123', 'abay Admin', 'admin'),
 ('u2', 'owner', 'owner123', 'Sari Owner', 'owner'),
 ('u3', 'barista', 'barista123', 'Andi Barista', 'barista');
 
