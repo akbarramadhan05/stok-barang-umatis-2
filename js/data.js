@@ -23,7 +23,7 @@ const DataCache = { inventory: [], suppliers: [], transactions: [], users: [], s
 
 const DEFAULT_USERS = [
   { id: "u1", username: "admin", password: "admin123", name: "Ratih Admin", role: ROLES.ADMIN },
-  { id: "u2", username: "owner", password: "owner123", name: "Sari Owner", role: ROLES.OWNER },
+  { id: "u2", username: "owner", password: "owner123", name: " Owner", role: ROLES.OWNER },
   { id: "u3", username: "barista", password: "barista123", name: "Andi Barista", role: ROLES.BARISTA },
 ];
 
