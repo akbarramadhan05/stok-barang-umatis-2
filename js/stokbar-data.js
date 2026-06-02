@@ -200,15 +200,29 @@ function initLocalData() {
 async function refreshInventory() {
   if (USE_SUPABASE) {
     clearLegacyBrowserCache();
+    let rows = null;
     const sb = getSupabase();
-    if (!sb) throw new Error("Supabase belum terhubung — cek js/supabase-env.js");
-    const { data, error } = await fetchWithTimeout(
-      sb.from("inventory").select("*").order("name", { ascending: true }),
-      15000,
-      "Memuat barang"
-    );
-    if (error) throw new Error(error.message || "Gagal membaca tabel inventory");
-    DataCache.inventory = (data || []).map(rowToInventory).filter((i) => i.isActive !== false);
+    if (sb) {
+      try {
+        const { data, error } = await fetchWithTimeout(
+          sb.from("inventory").select("*").order("name", { ascending: true }),
+          12000,
+          "Memuat barang"
+        );
+        if (error) throw new Error(error.message || "Gagal membaca inventory");
+        rows = data;
+      } catch (clientErr) {
+        console.warn("refreshInventory client:", clientErr.message);
+      }
+    }
+    if (!rows) {
+      rows = await fetchWithTimeout(
+        supabaseRestGet("inventory", "select=*&order=name.asc"),
+        12000,
+        "Memuat barang"
+      );
+    }
+    DataCache.inventory = (rows || []).map(rowToInventory).filter((i) => i.isActive !== false);
     return DataCache.inventory;
   }
   if (typeof USE_API !== "undefined" && USE_API) {
@@ -244,29 +258,39 @@ async function refreshSuppliers() {
 
 async function refreshTransactions(opts = {}) {
   if (USE_SUPABASE) {
+    let rows = null;
     const sb = getSupabase();
-    if (!sb) {
-      DataCache.transactions = [];
-      return DataCache.transactions;
-    }
-    try {
-      let q = sb.from("transactions").select("*").order("created_at", { ascending: false });
-      if (opts.type) q = q.eq("type", opts.type);
-      if (opts.date) q = q.eq("tx_date", opts.date);
-      if (opts.limit) q = q.limit(opts.limit);
-      const { data, error } = await q;
-      if (error) {
-        console.warn("refreshTransactions:", error.message);
-        DataCache.transactions = [];
-        return DataCache.transactions;
+    if (sb) {
+      try {
+        let q = sb.from("transactions").select("*").order("created_at", { ascending: false });
+        if (opts.type) q = q.eq("type", opts.type);
+        if (opts.date) q = q.eq("tx_date", opts.date);
+        if (opts.limit) q = q.limit(opts.limit);
+        const { data, error } = await fetchWithTimeout(q, 12000, "Memuat transaksi");
+        if (!error) rows = data;
+        else console.warn("refreshTransactions:", error.message);
+      } catch (e) {
+        console.warn("refreshTransactions client:", e.message || e);
       }
-      DataCache.transactions = (data || []).map(rowToTransaction);
-      return DataCache.transactions;
-    } catch (e) {
-      console.warn("refreshTransactions:", e);
-      DataCache.transactions = [];
-      return DataCache.transactions;
     }
+    if (!rows) {
+      try {
+        let query = "select=*&order=created_at.desc";
+        if (opts.type) query += `&type=eq.${opts.type}`;
+        if (opts.date) query += `&tx_date=eq.${opts.date}`;
+        if (opts.limit) query += `&limit=${opts.limit}`;
+        rows = await fetchWithTimeout(
+          supabaseRestGet("transactions", query),
+          12000,
+          "Memuat transaksi"
+        );
+      } catch (e) {
+        console.warn("refreshTransactions REST:", e.message || e);
+        rows = [];
+      }
+    }
+    DataCache.transactions = (rows || []).map(rowToTransaction);
+    return DataCache.transactions;
   }
   if (typeof USE_API !== "undefined" && USE_API) {
     const res = await apiGet("transactions", opts);

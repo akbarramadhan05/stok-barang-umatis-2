@@ -103,9 +103,9 @@ async function showDbStatusBanner() {
   try {
     if (USE_SUPABASE) {
       await testSupabaseConnection();
-      let n = 0;
+      let n = getInventory().length;
       try {
-        await refreshInventory();
+        if (n === 0) await refreshInventory();
         n = getInventory().length;
       } catch (refreshErr) {
         el.style.background = "var(--color-danger-bg)";

@@ -15,6 +15,7 @@ Itu artinya project Vercel **belum terhubung** ke repo GitHub terbaru:
 3. **Settings** → **Environment Variables** (Production):
    - `SUPABASE_URL` = `https://klblycxszklteapdfwyf.supabase.co`
    - `SUPABASE_ANON_KEY` = anon key dari Supabase (Settings → API)
+   - **PENTING:** `SUPABASE_URL` hanya `https://XXXX.supabase.co` — **jangan** tambahkan `/rest/v1` atau path lain. Kalau salah, login menampilkan *Invalid path specified in request URL*.
 4. **Deployments** → **Redeploy** (centang "Use existing Build Cache" = **OFF**)
 5. Setelah deploy, tes buka:
    - `https://...vercel.app/js/stokbar-data.js` → harus kode JavaScript
