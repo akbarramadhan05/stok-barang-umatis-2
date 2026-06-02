@@ -74,6 +74,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-env.js"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/supabase-init.js"></script>
   <script src="js/storage.js"></script>
@@ -129,7 +130,13 @@
 
     document.getElementById("txOutForm").addEventListener("submit", async (e) => {
       e.preventDefault();
+      await refreshInventory();
+      itemPicker.render();
       const itemId = itemPicker.getSelectedId();
+      if (!itemId) {
+        showToast("Pilih barang dulu dari dropdown atau klik barang di daftar.", "error");
+        return;
+      }
       try {
         await addTransaction({
           type: "out",

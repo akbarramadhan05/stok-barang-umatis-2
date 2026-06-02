@@ -100,6 +100,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-env.js"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/supabase-init.js"></script>
   <script src="js/storage.js"></script>
@@ -212,6 +213,7 @@
 
     document.getElementById("searchInput").addEventListener("input", renderTable);
     categoryFilter.addEventListener("change", renderTable);
+    window.addEventListener("stokbar:data-reloaded", renderTable);
     renderTable();
     })();
   </script>

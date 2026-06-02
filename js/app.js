@@ -79,34 +79,57 @@ function renderSidebar(activePage) {
 }
 
 async function showDbStatusBanner() {
-  if (!USE_SUPABASE && (typeof USE_API === "undefined" || !USE_API)) return;
   let el = document.getElementById("dbStatusBanner");
   if (!el) {
     el = document.createElement("div");
     el.id = "dbStatusBanner";
     el.style.cssText =
-      "padding:0.5rem 1rem;font-size:0.8rem;font-weight:600;text-align:center;border-bottom:1px solid var(--color-border)";
+      "padding:0.5rem 1rem;font-size:0.8rem;font-weight:600;text-align:center;border-bottom:1px solid var(--color-border);display:flex;align-items:center;justify-content:center;gap:0.75rem;flex-wrap:wrap";
     const header = document.querySelector(".top-header");
     if (header) header.after(el);
   }
+
+  const localMode = !USE_SUPABASE && (typeof USE_API === "undefined" || !USE_API);
+  if (localMode) {
+    el.style.background = "#fef3c7";
+    el.style.color = "#92400e";
+    el.innerHTML =
+      '⚠️ Mode <strong>LOKAL</strong> (browser) — perubahan di Supabase tidak tampil. Isi <code>SUPABASE_ANON_KEY</code> di Vercel lalu redeploy. ' +
+      '<button type="button" class="btn btn-ghost btn-sm" id="btnReloadDb">Muat ulang</button>';
+    document.getElementById("btnReloadDb")?.addEventListener("click", () => window.location.reload());
+    return;
+  }
+
   try {
     if (USE_SUPABASE) {
       await testSupabaseConnection();
+      await refreshInventory();
+      const n = getInventory().length;
       el.style.background = "var(--color-success-bg)";
       el.style.color = "#166534";
-      el.textContent = "Terhubung ke Supabase Cloud";
+      el.innerHTML = `✅ Supabase — ${n} barang dimuat dari database ` +
+        '<button type="button" class="btn btn-ghost btn-sm" id="btnReloadDb">↻ Muat ulang</button>';
     } else {
       await apiGet("ping");
       el.style.background = "var(--color-success-bg)";
       el.style.color = "#166534";
       el.textContent = "Terhubung ke MySQL (XAMPP)";
     }
-  } catch {
+    document.getElementById("btnReloadDb")?.addEventListener("click", async () => {
+      try {
+        await forceReloadFromDatabase();
+        showToast(`Data diperbarui (${getInventory().length} barang)`);
+        window.dispatchEvent(new CustomEvent("stokbar:data-reloaded"));
+      } catch (e) {
+        showToast(e.message, "error");
+      }
+    });
+  } catch (e) {
     el.style.background = "var(--color-danger-bg)";
     el.style.color = "#991b1b";
     el.textContent = USE_SUPABASE
-      ? "Supabase belum dikonfigurasi — isi js/supabase-config.js"
-      : "Database tidak terhubung — cek XAMPP / SYNC-KE-XAMPP.bat";
+      ? "Supabase error: " + (e.message || "cek API key di Vercel")
+      : "Database tidak terhubung — cek XAMPP";
   }
 }
 
@@ -201,6 +224,9 @@ function setupTransactionItemPicker({ pickerId, selectId, hiddenId, hintId, onSe
 
   function render() {
     const items = getInventory();
+    if (selectedId && !items.some((i) => i.id === selectedId)) {
+      setSelected("", "");
+    }
     if (selectEl) {
       selectEl.innerHTML =
         '<option value="">— Pilih barang —</option>' +
@@ -248,7 +274,12 @@ function setupTransactionItemPicker({ pickerId, selectId, hiddenId, hintId, onSe
   render();
   return {
     render,
-    getSelectedId: () => selectedId || hiddenEl?.value || "",
+    getSelectedId: () => {
+      const fromHidden = (hiddenEl?.value || "").trim();
+      const fromSelect = (selectEl?.value || "").trim();
+      const fromState = (selectedId || "").trim();
+      return fromSelect || fromHidden || fromState;
+    },
     clearSelection: () => setSelected("", ""),
   };
 }

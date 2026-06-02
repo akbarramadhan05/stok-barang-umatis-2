@@ -52,6 +52,7 @@
 
   <!-- Login mandiri: tidak bergantung js/data.js atau js/auth.js (hindari file rusak di Vercel) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-env.js"></script>
   <script>
     (function () {
       const SESSION_KEY = "stokbar_session";
@@ -62,7 +63,7 @@
         { id: "u3", username: "barista", password: "barista123", name: "Andi Barista", role: "barista" },
       ];
 
-      window.SUPABASE_URL = SB_URL;
+      window.SUPABASE_URL = window.SUPABASE_URL || SB_URL;
 
       function getSession() {
         try {
@@ -127,10 +128,11 @@
 
       async function boot() {
         try {
-          await loadScript("js/supabase-config.js?v=5");
-        } catch (_) {
-          /* mode demo lokal jika config tidak ada */
-        }
+          await loadScript("js/supabase-env.js?v=6");
+        } catch (_) {}
+        try {
+          await loadScript("js/supabase-config.js?v=6");
+        } catch (_) {}
 
         if (getSession()) {
           window.location.href = "dashboard.html";

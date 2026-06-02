@@ -181,8 +181,12 @@ function initLocalData() {
 // --- Supabase loaders ---
 async function refreshInventory() {
   if (USE_SUPABASE) {
+    clearLegacyBrowserCache();
     const sb = getSupabase();
-    const { data, error } = await sb.from("inventory").select("*").order("name");
+    const { data, error } = await sb
+      .from("inventory")
+      .select("*")
+      .order("name", { ascending: true });
     if (error) throw error;
     DataCache.inventory = (data || []).map(rowToInventory).filter((i) => i.isActive !== false);
     return DataCache.inventory;
@@ -311,8 +315,11 @@ async function saveInventoryItem(data) {
     } else {
       row.id = generateId("i");
       row.created_at = new Date().toISOString();
+      row.is_active = true;
       const { error } = await sb.from("inventory").insert(row);
-      if (error) throw error;
+      if (error) throw new Error(error.message || "Gagal menyimpan barang ke database.");
+      const { data: check, error: checkErr } = await sb.from("inventory").select("id").eq("id", row.id).maybeSingle();
+      if (checkErr || !check) throw new Error("Barang gagal tersimpan. Cek koneksi Supabase.");
     }
     await refreshInventory();
     return;
@@ -470,6 +477,56 @@ async function saveSettings(data) {
   DataCache.settings = data;
 }
 
+/** Transaksi langsung lewat Supabase client (tanpa RPC — lebih andal) */
+async function addTransactionSupabaseDirect(sb, { type, itemId, quantity, note, user }) {
+  const { data: row, error: fetchErr } = await sb
+    .from("inventory")
+    .select("id, name, stock, unit")
+    .eq("id", itemId)
+    .maybeSingle();
+  if (fetchErr) throw new Error(fetchErr.message);
+  if (!row) {
+    throw new Error(
+      `Barang tidak ada di database (ID: ${itemId}). Simpan dulu di Katalog Barang, lalu Muat ulang.`
+    );
+  }
+
+  const stock = parseFloat(row.stock);
+  const qty = parseFloat(quantity);
+  if (type === "out" && stock < qty) {
+    throw new Error(`Stok tidak cukup. Tersedia: ${stock} ${row.unit}`);
+  }
+
+  const newStock =
+    type === "in"
+      ? Math.round((stock + qty) * 100) / 100
+      : Math.round((stock - qty) * 100) / 100;
+
+  const { error: updErr } = await sb
+    .from("inventory")
+    .update({ stock: newStock, updated_at: new Date().toISOString() })
+    .eq("id", itemId);
+  if (updErr) throw new Error(updErr.message);
+
+  const txId = `tx_${Date.now()}`;
+  const { error: txErr } = await sb.from("transactions").insert({
+    id: txId,
+    type,
+    item_id: itemId,
+    item_name: row.name,
+    quantity: qty,
+    unit: row.unit,
+    note: note || "",
+    user_id: user.id,
+    user_name: user.name,
+    tx_date: new Date().toISOString().slice(0, 10),
+  });
+  if (txErr) throw new Error(txErr.message);
+
+  await refreshInventory();
+  return { id: txId, itemId, newStock };
+}
+
 async function addTransaction({ type, itemId, quantity, note, user }) {
   const id = String(itemId || "").trim();
   if (!id) throw new Error("Pilih barang dulu — pilih dari dropdown atau klik barang di daftar.");
@@ -481,34 +538,33 @@ async function addTransaction({ type, itemId, quantity, note, user }) {
 
   await ensureInventoryLoaded();
   const cached = getItemById(id);
-  if (!cached) {
-    const list = getInventory().map((i) => i.id).slice(0, 5).join(", ");
-    throw new Error(
-      `Barang tidak ditemukan (ID: ${id}). Refresh (F5). Barang tersedia: ${list || "kosong — import schema.sql di Supabase"}`
-    );
-  }
 
   if (USE_SUPABASE) {
     const sb = getSupabase();
-    const { data, error } = await sb.rpc("process_transaction", {
-      p_type: type,
-      p_item_id: id,
-      p_quantity: qty,
-      p_note: note || "",
-      p_user_id: user.id,
-      p_user_name: user.name,
-    });
-    if (error) {
-      const msg = error.message || "";
-      if (msg.includes("process_transaction") || msg.includes("Could not find the function")) {
-        throw new Error(
-          "Fungsi database belum ada. Buka Supabase → SQL Editor → jalankan file supabase/fix-transaksi.sql"
-        );
+    if (!sb) throw new Error("Supabase belum terhubung. Cek js/supabase-env.js atau env Vercel.");
+    try {
+      return await addTransactionSupabaseDirect(sb, {
+        type,
+        itemId: id,
+        quantity: qty,
+        note,
+        user,
+      });
+    } catch (directErr) {
+      const { error: rpcErr } = await sb.rpc("process_transaction", {
+        p_type: type,
+        p_item_id: id,
+        p_quantity: qty,
+        p_note: note || "",
+        p_user_id: user.id,
+        p_user_name: user.name,
+      });
+      if (!rpcErr) {
+        await refreshInventory();
+        return { ok: true };
       }
-      throw new Error(msg || "Transaksi gagal.");
+      throw new Error(directErr.message || rpcErr.message || "Transaksi gagal.");
     }
-    await refreshInventory();
-    return typeof data === "string" ? JSON.parse(data) : data;
   }
 
   if (typeof USE_API !== "undefined" && USE_API) {
@@ -517,8 +573,12 @@ async function addTransaction({ type, itemId, quantity, note, user }) {
     return res.data;
   }
 
-  const item = getItemById(id);
-  if (!item) throw new Error("Barang tidak ditemukan");
+  const item = cached || getItemById(id);
+  if (!item) {
+    throw new Error(
+      `Barang tidak ditemukan (ID: ${id}). Refresh halaman (F5) atau tambah barang di Katalog.`
+    );
+  }
   if (type === "out" && item.stock < qty) {
     throw new Error(`Stok tidak cukup. Tersedia: ${item.stock} ${item.unit}`);
   }
@@ -597,13 +657,30 @@ function clearLegacyBrowserCache() {
 }
 
 async function ensureInventoryLoaded() {
+  if (USE_SUPABASE || (typeof USE_API !== "undefined" && USE_API)) {
+    return refreshInventory();
+  }
   if (DataCache.inventory && DataCache.inventory.length > 0) return DataCache.inventory;
   await refreshInventory();
-  if (!USE_SUPABASE && DataCache.inventory.length === 0) {
+  if (DataCache.inventory.length === 0) {
     initLocalData();
     DataCache.inventory = getJSON(STORAGE_KEYS.inventory, DEFAULT_INVENTORY);
   }
   return DataCache.inventory;
+}
+
+/** Paksa ambil data terbaru dari Supabase (panggil dari tombol refresh) */
+async function forceReloadFromDatabase() {
+  DataCache.inventory = [];
+  DataCache.suppliers = [];
+  DataCache.transactions = [];
+  clearLegacyBrowserCache();
+  if (USE_SUPABASE) {
+    await Promise.all([refreshInventory(), refreshSuppliers(), refreshTransactions({ limit: 200 })]);
+    return { inventory: DataCache.inventory.length };
+  }
+  await refreshInventory();
+  return { inventory: DataCache.inventory.length };
 }
 
 /** Muat ulang katalog default ke localStorage (reset barang demo) */
