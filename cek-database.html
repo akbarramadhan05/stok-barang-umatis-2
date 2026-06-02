@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cek Database — Stokbar Umatis</title>
+  <link rel="stylesheet" href="css/variables.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/components.css" />
+</head>
+<body style="padding:1.5rem;max-width:640px;margin:0 auto">
+  <h1>Cek Koneksi Database</h1>
+  <p style="color:var(--color-text-secondary);margin-bottom:1rem">Halaman ini membantu diagnosa error "barang tidak ditemukan".</p>
+  <button type="button" class="btn btn-primary" id="btnCek">Jalankan Pengecekan</button>
+  <pre id="hasil" style="margin-top:1rem;padding:1rem;background:#f0fdfa;border-radius:12px;font-size:0.8rem;white-space:pre-wrap"></pre>
+  <p style="margin-top:1rem"><a href="login.html">← Kembali ke Login</a></p>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/supabase-init.js"></script>
+  <script>
+    document.getElementById("btnCek").addEventListener("click", async () => {
+      const out = document.getElementById("hasil");
+      out.textContent = "Memeriksa...\n";
+      const lines = [];
+
+      lines.push("USE_SUPABASE: " + (typeof USE_SUPABASE !== "undefined" ? USE_SUPABASE : "?"));
+      lines.push("URL: " + (window.SUPABASE_URL || "-"));
+      lines.push("Key OK: " + (window.SUPABASE_ANON_KEY && !window.SUPABASE_ANON_KEY.includes("ISI_ANON")));
+
+      if (!USE_SUPABASE) {
+        lines.push("\n❌ Supabase BELUM dikonfigurasi.");
+        lines.push("Isi js/supabase-config.js atau env Vercel SUPABASE_URL + SUPABASE_ANON_KEY");
+        out.textContent = lines.join("\n");
+        return;
+      }
+
+      const sb = getSupabase();
+      try {
+        const { count, error: e1 } = await sb.from("inventory").select("*", { count: "exact", head: true });
+        if (e1) lines.push("\n❌ Tabel inventory: " + e1.message);
+        else lines.push("\n✅ Total barang di database: " + count);
+
+        const { data: items, error: e2 } = await sb.from("inventory").select("id, name, stock, unit").limit(5);
+        if (e2) lines.push("❌ Baca barang: " + e2.message);
+        else if (!items?.length) lines.push("❌ TIDAK ADA BARANG — jalankan supabase/schema.sql");
+        else {
+          lines.push("✅ Contoh barang:");
+          items.forEach((i) => lines.push("   - " + i.id + " | " + i.name + " | " + i.stock + " " + i.unit));
+        }
+
+        const { error: e3 } = await sb.rpc("process_transaction", {
+          p_type: "in",
+          p_item_id: "___test___",
+          p_quantity: 1,
+          p_note: "",
+          p_user_id: "u1",
+          p_user_name: "Test",
+        });
+        if (e3?.message?.includes("Could not find")) {
+          lines.push("\n❌ Fungsi process_transaction BELUM ADA.");
+          lines.push("→ Jalankan supabase/fix-transaksi.sql di SQL Editor");
+        } else if (e3?.message?.includes("tidak ditemukan")) {
+          lines.push("\n✅ Fungsi process_transaction sudah terpasang (tes ID dummy gagal = normal)");
+        } else if (e3) lines.push("\n⚠️ RPC: " + e3.message);
+      } catch (err) {
+        lines.push("\n❌ Error: " + err.message);
+      }
+
+      out.textContent = lines.join("\n");
+    });
+  </script>
+</body>
+</html>

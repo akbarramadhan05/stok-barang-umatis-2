@@ -4,11 +4,14 @@
 let _supabaseClient = null;
 
 function isSupabaseConfigured() {
+  const url = window.SUPABASE_URL || "";
+  const key = window.SUPABASE_ANON_KEY || "";
   return (
-    window.SUPABASE_URL &&
-    window.SUPABASE_ANON_KEY &&
-    !window.SUPABASE_URL.includes("XXXXXXXX") &&
-    !window.SUPABASE_ANON_KEY.includes("ISI_ANON")
+    url.includes("supabase.co") &&
+    !url.includes("XXXXXXXX") &&
+    key.length > 20 &&
+    !key.includes("ISI_ANON") &&
+    (key.startsWith("eyJ") || key.startsWith("sb_publishable_"))
   );
 }
 

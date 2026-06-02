@@ -88,7 +88,10 @@
     let itemPicker;
 
     try {
-      await refreshInventory();
+      await ensureInventoryLoaded();
+      if (getInventory().length === 0) {
+        showToast("Belum ada barang di database. Admin: jalankan schema.sql di Supabase.", "error");
+      }
       await refreshTransactions({ type: "out", date: today });
     } catch (e) { showDataError(e); return; }
 

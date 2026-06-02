@@ -414,44 +414,43 @@ async function saveSettings(data) {
 
 async function addTransaction({ type, itemId, quantity, note, user }) {
   const id = String(itemId || "").trim();
-  if (!id) throw new Error("Pilih barang dulu — klik barang di daftar atau pilih dari dropdown.");
+  if (!id) throw new Error("Pilih barang dulu — pilih dari dropdown atau klik barang di daftar.");
 
   const qty = parseFloat(quantity);
   if (isNaN(qty) || qty <= 0) throw new Error("Jumlah tidak valid");
 
+  if (!user?.id) throw new Error("Sesi login tidak valid. Silakan logout dan login lagi.");
+
+  await ensureInventoryLoaded();
+  const cached = getItemById(id);
+  if (!cached) {
+    const list = getInventory().map((i) => i.id).slice(0, 5).join(", ");
+    throw new Error(
+      `Barang tidak ditemukan (ID: ${id}). Refresh (F5). Barang tersedia: ${list || "kosong — import schema.sql di Supabase"}`
+    );
+  }
+
   if (USE_SUPABASE) {
     const sb = getSupabase();
-    let item = getItemById(id);
-    if (!item) {
-      const { data, error: e1 } = await sb.from("inventory").select("*").eq("id", id).maybeSingle();
-      if (e1) throw new Error(e1.message || "Gagal membaca data barang.");
-      if (!data) throw new Error("Barang tidak ditemukan di database. Refresh halaman (F5) atau tambah di Katalog Barang.");
-      item = rowToInventory(data);
-    }
-    const stock = parseFloat(item.stock);
-    if (type === "out" && stock < qty) {
-      throw new Error(`Stok tidak cukup. Tersedia: ${stock} ${item.unit}`);
-    }
-    const newStock = type === "in" ? Math.round((stock + qty) * 100) / 100 : Math.round((stock - qty) * 100) / 100;
-    const { error: e2 } = await sb.from("inventory").update({ stock: newStock }).eq("id", id);
-    if (e2) throw e2;
-    const txId = generateId("tx");
-    const today = new Date().toISOString().slice(0, 10);
-    const { error: e3 } = await sb.from("transactions").insert({
-      id: txId,
-      type,
-      item_id: id,
-      item_name: item.name,
-      quantity: qty,
-      unit: item.unit,
-      note: note || "",
-      user_id: user.id,
-      user_name: user.name,
-      tx_date: today,
+    const { data, error } = await sb.rpc("process_transaction", {
+      p_type: type,
+      p_item_id: id,
+      p_quantity: qty,
+      p_note: note || "",
+      p_user_id: user.id,
+      p_user_name: user.name,
     });
-    if (e3) throw e3;
+    if (error) {
+      const msg = error.message || "";
+      if (msg.includes("process_transaction") || msg.includes("Could not find the function")) {
+        throw new Error(
+          "Fungsi database belum ada. Buka Supabase → SQL Editor → jalankan file supabase/fix-transaksi.sql"
+        );
+      }
+      throw new Error(msg || "Transaksi gagal.");
+    }
     await refreshInventory();
-    return { id: txId, type, itemId: id, itemName: item.name, quantity: qty, unit: item.unit };
+    return typeof data === "string" ? JSON.parse(data) : data;
   }
 
   if (typeof USE_API !== "undefined" && USE_API) {
@@ -533,9 +532,20 @@ function showDataError(err) {
 }
 
 function clearLegacyBrowserCache() {
+  if (!USE_SUPABASE) return;
   ["stokbar_inventory", "stokbar_transactions", "stokbar_suppliers", "stokbar_users", "stokbar_settings"].forEach(
     (k) => localStorage.removeItem(k)
   );
+}
+
+async function ensureInventoryLoaded() {
+  if (DataCache.inventory && DataCache.inventory.length > 0) return DataCache.inventory;
+  await refreshInventory();
+  if (!USE_SUPABASE && DataCache.inventory.length === 0) {
+    initLocalData();
+    DataCache.inventory = getJSON(STORAGE_KEYS.inventory, []);
+  }
+  return DataCache.inventory;
 }
 
 if (!USE_SUPABASE && (typeof USE_API === "undefined" || !USE_API)) {
