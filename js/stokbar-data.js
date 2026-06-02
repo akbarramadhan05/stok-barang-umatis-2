@@ -24,6 +24,15 @@ function setJSON(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
+function fetchWithTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(`${label} — koneksi timeout (${ms / 1000}s)`)), ms);
+    }),
+  ]);
+}
+
 const ROLES = { ADMIN: "admin", OWNER: "owner", BARISTA: "barista" };
 
 const ROLE_LABELS = { admin: "Admin", owner: "Owner", barista: "Tim Barista" };
@@ -184,10 +193,11 @@ async function refreshInventory() {
     clearLegacyBrowserCache();
     const sb = getSupabase();
     if (!sb) throw new Error("Supabase belum terhubung — cek js/supabase-env.js");
-    const { data, error } = await sb
-      .from("inventory")
-      .select("*")
-      .order("name", { ascending: true });
+    const { data, error } = await fetchWithTimeout(
+      sb.from("inventory").select("*").order("name", { ascending: true }),
+      15000,
+      "Memuat barang"
+    );
     if (error) throw new Error(error.message || "Gagal membaca tabel inventory");
     DataCache.inventory = (data || []).map(rowToInventory).filter((i) => i.isActive !== false);
     return DataCache.inventory;

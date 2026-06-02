@@ -104,22 +104,6 @@
     const session = initLayout("dashboard.html", "Dashboard");
     if (!session) return;
 
-    try {
-      await Promise.all([
-        refreshInventory().catch((e) => {
-          console.warn("inventory", e);
-          return [];
-        }),
-        refreshTransactions({ limit: 200 }).catch((e) => {
-          console.warn("transactions", e);
-          return [];
-        }),
-      ]);
-    } catch (e) {
-      showDataError(e);
-      showBootErr("Gagal memuat database: " + (e.message || e) + " — cek Supabase & tombol Muat ulang di atas.");
-    }
-
     function renderDashboard() {
       const inventory = getInventory();
       const txs = getTransactions();
@@ -227,11 +211,28 @@
       console.error(e);
     }
 
-    if (getInventory().length === 0) {
-      showBootErr(
-        (bootErr?.textContent ? bootErr.textContent + " " : "") +
-          "Belum ada barang di database. Jalankan supabase/isi-semua-barang.sql di Supabase SQL Editor, lalu klik Muat ulang."
-      );
+    try {
+      await Promise.all([
+        refreshInventory().catch((e) => {
+          console.warn("inventory", e);
+          showBootErr("Gagal memuat barang: " + e.message);
+          return [];
+        }),
+        refreshTransactions({ limit: 200 }).catch((e) => {
+          console.warn("transactions", e);
+          return [];
+        }),
+      ]);
+      renderDashboard();
+      if (getInventory().length === 0) {
+        showBootErr(
+          "Belum ada barang di database. Jalankan supabase/isi-semua-barang.sql di Supabase SQL Editor, lalu klik Muat ulang di banner atas."
+        );
+      }
+    } catch (e) {
+      showDataError(e);
+      showBootErr("Gagal memuat database: " + (e.message || e));
+      renderDashboard();
     }
     })();
   </script>
