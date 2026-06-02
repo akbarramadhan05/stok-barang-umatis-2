@@ -51,12 +51,11 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/supabase-config.js"></script>
-  <script src="js/supabase-init.js"></script>
-  <script src="js/storage.js"></script>
-  <script src="js/api-client.js"></script>
-  <script src="js/data.js"></script>
-  <script src="js/auth.js"></script>
+  <script src="js/supabase-config.js?v=4"></script>
+  <script src="js/supabase-init.js?v=4"></script>
+  <script src="js/storage.js?v=4"></script>
+  <script src="js/api-client.js?v=4"></script>
+  <script src="js/stokbar-auth.js?v=4"></script>
   <script>
     if (getSession()) window.location.href = "dashboard.html";
 
@@ -80,7 +79,7 @@
       } catch (err) {
         let msg = err.message || "Gagal login.";
         if (msg.includes("getJSON")) {
-          msg = "File JS belum ter-update di server. Deploy ulang dari GitHub (pastikan js/data.js & js/storage.js ikut ter-push).";
+          msg = "File JS belum ter-update di server. Deploy ulang dari GitHub (pastikan js/stokbar-data.js & js/storage.js ikut ter-push).";
         } else if (typeof USE_SUPABASE !== "undefined" && !USE_SUPABASE) {
           msg += " Supabase belum dikonfigurasi — isi SUPABASE_ANON_KEY di Vercel → Settings → Environment Variables.";
         }

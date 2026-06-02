@@ -33,6 +33,18 @@ if (typeof DEFAULT_USERS === "undefined") {
     { id: "u3", username: "barista", password: "barista123", name: "Andi Barista", role: "barista" },
   ];
 }
+if (typeof USE_SUPABASE === "undefined") {
+  var USE_SUPABASE = false;
+}
+if (typeof clearLegacyBrowserCache === "undefined") {
+  function clearLegacyBrowserCache() {
+    if (typeof USE_SUPABASE !== "undefined" && USE_SUPABASE) {
+      ["stokbar_inventory", "stokbar_transactions", "stokbar_suppliers", "stokbar_users", "stokbar_settings"].forEach(
+        (k) => localStorage.removeItem(k)
+      );
+    }
+  }
+}
 
 const PAGE_PERMISSIONS = {
   "dashboard.html": [ROLES.ADMIN, ROLES.OWNER, ROLES.BARISTA],
