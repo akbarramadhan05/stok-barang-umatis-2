@@ -183,11 +183,12 @@ async function refreshInventory() {
   if (USE_SUPABASE) {
     clearLegacyBrowserCache();
     const sb = getSupabase();
+    if (!sb) throw new Error("Supabase belum terhubung — cek js/supabase-env.js");
     const { data, error } = await sb
       .from("inventory")
       .select("*")
       .order("name", { ascending: true });
-    if (error) throw error;
+    if (error) throw new Error(error.message || "Gagal membaca tabel inventory");
     DataCache.inventory = (data || []).map(rowToInventory).filter((i) => i.isActive !== false);
     return DataCache.inventory;
   }
@@ -225,14 +226,28 @@ async function refreshSuppliers() {
 async function refreshTransactions(opts = {}) {
   if (USE_SUPABASE) {
     const sb = getSupabase();
-    let q = sb.from("transactions").select("*").order("created_at", { ascending: false });
-    if (opts.type) q = q.eq("type", opts.type);
-    if (opts.date) q = q.eq("tx_date", opts.date);
-    if (opts.limit) q = q.limit(opts.limit);
-    const { data, error } = await q;
-    if (error) throw error;
-    DataCache.transactions = (data || []).map(rowToTransaction);
-    return DataCache.transactions;
+    if (!sb) {
+      DataCache.transactions = [];
+      return DataCache.transactions;
+    }
+    try {
+      let q = sb.from("transactions").select("*").order("created_at", { ascending: false });
+      if (opts.type) q = q.eq("type", opts.type);
+      if (opts.date) q = q.eq("tx_date", opts.date);
+      if (opts.limit) q = q.limit(opts.limit);
+      const { data, error } = await q;
+      if (error) {
+        console.warn("refreshTransactions:", error.message);
+        DataCache.transactions = [];
+        return DataCache.transactions;
+      }
+      DataCache.transactions = (data || []).map(rowToTransaction);
+      return DataCache.transactions;
+    } catch (e) {
+      console.warn("refreshTransactions:", e);
+      DataCache.transactions = [];
+      return DataCache.transactions;
+    }
   }
   if (typeof USE_API !== "undefined" && USE_API) {
     const res = await apiGet("transactions", opts);

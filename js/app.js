@@ -103,8 +103,16 @@ async function showDbStatusBanner() {
   try {
     if (USE_SUPABASE) {
       await testSupabaseConnection();
-      await refreshInventory();
-      const n = getInventory().length;
+      let n = 0;
+      try {
+        await refreshInventory();
+        n = getInventory().length;
+      } catch (refreshErr) {
+        el.style.background = "var(--color-danger-bg)";
+        el.style.color = "#991b1b";
+        el.textContent = "Supabase: " + (refreshErr.message || "gagal memuat barang");
+        return;
+      }
       el.style.background = "var(--color-success-bg)";
       el.style.color = "#166534";
       el.innerHTML = `✅ Supabase — ${n} barang dimuat dari database ` +

@@ -23,7 +23,10 @@
       </header>
 
       <div class="page-content">
-        <div class="stats-grid" id="statsGrid"></div>
+        <div id="bootError" class="alert alert-danger" style="display:none;margin-bottom:1rem" role="alert"></div>
+        <div class="stats-grid" id="statsGrid">
+          <p id="loadingMsg" style="grid-column:1/-1;color:var(--color-text-muted);padding:1rem">Memuat data...</p>
+        </div>
 
         <div id="lowStockAlert"></div>
 
@@ -83,11 +86,40 @@
   <script src="js/charts.js"></script>
   <script>
     (async () => {
+    const bootErr = document.getElementById("bootError");
+    const showBootErr = (msg) => {
+      if (bootErr) {
+        bootErr.textContent = msg;
+        bootErr.style.display = "flex";
+      }
+      if (typeof showToast === "function") showToast(msg, "error");
+    };
+
+    if (typeof initLayout !== "function" || typeof refreshInventory !== "function") {
+      showBootErr(
+        "Script aplikasi gagal dimuat. Pastikan deploy Vercel dari GitHub terbaru (js/stokbar-data.js, js/app.js). Hard refresh: Ctrl+Shift+R."
+      );
+      return;
+    }
+
     const session = initLayout("dashboard.html", "Dashboard");
     if (!session) return;
+
     try {
-      await Promise.all([refreshInventory(), refreshTransactions({ limit: 200 })]);
-    } catch (e) { showDataError(e); return; }
+      await Promise.all([
+        refreshInventory().catch((e) => {
+          console.warn("inventory", e);
+          return [];
+        }),
+        refreshTransactions({ limit: 200 }).catch((e) => {
+          console.warn("transactions", e);
+          return [];
+        }),
+      ]);
+    } catch (e) {
+      showDataError(e);
+      showBootErr("Gagal memuat database: " + (e.message || e) + " — cek Supabase & tombol Muat ulang di atas.");
+    }
 
     function renderDashboard() {
       const inventory = getInventory();
@@ -156,7 +188,12 @@
           .join("");
       }
 
-      renderInOutChart("mainChart");
+      try {
+        if (typeof renderInOutChart === "function") renderInOutChart("mainChart");
+      } catch (chartErr) {
+        document.getElementById("mainChart").innerHTML =
+          '<p style="color:var(--color-text-muted);font-size:0.875rem">Grafik tidak dapat dimuat.</p>';
+      }
 
       const recent = txs.slice(0, 8);
       document.getElementById("recentTxBody").innerHTML =
@@ -184,7 +221,19 @@
       }
     }
 
-    renderDashboard();
+    try {
+      renderDashboard();
+    } catch (e) {
+      showBootErr("Error tampilan: " + (e.message || e));
+      console.error(e);
+    }
+
+    if (getInventory().length === 0) {
+      showBootErr(
+        (bootErr?.textContent ? bootErr.textContent + " " : "") +
+          "Belum ada barang di database. Jalankan supabase/isi-semua-barang.sql di Supabase SQL Editor, lalu klik Muat ulang."
+      );
+    }
     })();
   </script>
 </body>
