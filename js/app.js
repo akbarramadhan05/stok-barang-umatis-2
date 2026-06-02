@@ -176,6 +176,83 @@ function waLink(phone, message) {
   return `https://wa.me/${num}?text=${text}`;
 }
 
+/**
+ * Dropdown + daftar klik untuk pilih barang (transaksi masuk/keluar)
+ */
+function setupTransactionItemPicker({ pickerId, selectId, hiddenId, hintId, onSelect }) {
+  let selectedId = null;
+  const pickerEl = document.getElementById(pickerId);
+  const selectEl = document.getElementById(selectId);
+  const hiddenEl = document.getElementById(hiddenId);
+  const hintEl = hintId ? document.getElementById(hintId) : null;
+
+  function setSelected(id, unit) {
+    selectedId = id;
+    if (hiddenEl) hiddenEl.value = id || "";
+    if (selectEl && id) selectEl.value = id;
+    if (hintEl && unit) hintEl.textContent = `Satuan: ${unit}`;
+    if (pickerEl) {
+      pickerEl.querySelectorAll(".item-option").forEach((o) => {
+        o.classList.toggle("selected", o.dataset.id === id);
+      });
+    }
+    if (onSelect) onSelect(id, unit);
+  }
+
+  function render() {
+    const items = getInventory();
+    if (selectEl) {
+      selectEl.innerHTML =
+        '<option value="">— Pilih barang —</option>' +
+        items
+          .map(
+            (i) =>
+              `<option value="${escapeHtml(i.id)}">${escapeHtml(i.name)} (${formatStock(i.stock, i.unit)})</option>`
+          )
+          .join("");
+      if (selectedId) selectEl.value = selectedId;
+    }
+    if (pickerEl) {
+      if (!items.length) {
+        pickerEl.innerHTML =
+          '<p style="color:var(--color-text-muted);font-size:0.875rem;padding:0.5rem">Belum ada barang. Admin: tambah di Katalog Barang dulu.</p>';
+        return;
+      }
+      pickerEl.innerHTML = items
+        .map(
+          (i) => `
+        <div class="item-option ${selectedId === i.id ? "selected" : ""}" data-id="${escapeHtml(i.id)}" data-unit="${escapeHtml(i.unit)}">
+          <span><strong>${escapeHtml(i.name)}</strong><br><small>${escapeHtml(i.category)}</small></span>
+          <span class="stock-qty">Stok: ${formatStock(i.stock, i.unit)}</span>
+        </div>`
+        )
+        .join("");
+      pickerEl.querySelectorAll(".item-option").forEach((el) => {
+        el.addEventListener("click", () => setSelected(el.dataset.id, el.dataset.unit));
+      });
+    }
+  }
+
+  if (selectEl) {
+    selectEl.addEventListener("change", () => {
+      const opt = selectEl.options[selectEl.selectedIndex];
+      if (!selectEl.value) {
+        setSelected("", "");
+        return;
+      }
+      const item = getItemById(selectEl.value);
+      setSelected(selectEl.value, item?.unit || "");
+    });
+  }
+
+  render();
+  return {
+    render,
+    getSelectedId: () => selectedId || hiddenEl?.value || "",
+    clearSelection: () => setSelected("", ""),
+  };
+}
+
 function openModal(id) {
   document.getElementById(id)?.classList.add("active");
 }

@@ -129,9 +129,9 @@ function initLocalData() {
 async function refreshInventory() {
   if (USE_SUPABASE) {
     const sb = getSupabase();
-    const { data, error } = await sb.from("inventory").select("*").eq("is_active", true).order("name");
+    const { data, error } = await sb.from("inventory").select("*").order("name");
     if (error) throw error;
-    DataCache.inventory = (data || []).map(rowToInventory);
+    DataCache.inventory = (data || []).map(rowToInventory).filter((i) => i.isActive !== false);
     return DataCache.inventory;
   }
   if (typeof USE_API !== "undefined" && USE_API) {
@@ -413,26 +413,34 @@ async function saveSettings(data) {
 }
 
 async function addTransaction({ type, itemId, quantity, note, user }) {
+  const id = String(itemId || "").trim();
+  if (!id) throw new Error("Pilih barang dulu — klik barang di daftar atau pilih dari dropdown.");
+
   const qty = parseFloat(quantity);
   if (isNaN(qty) || qty <= 0) throw new Error("Jumlah tidak valid");
 
   if (USE_SUPABASE) {
     const sb = getSupabase();
-    const { data: item, error: e1 } = await sb.from("inventory").select("*").eq("id", itemId).single();
-    if (e1 || !item) throw new Error("Barang tidak ditemukan");
+    let item = getItemById(id);
+    if (!item) {
+      const { data, error: e1 } = await sb.from("inventory").select("*").eq("id", id).maybeSingle();
+      if (e1) throw new Error(e1.message || "Gagal membaca data barang.");
+      if (!data) throw new Error("Barang tidak ditemukan di database. Refresh halaman (F5) atau tambah di Katalog Barang.");
+      item = rowToInventory(data);
+    }
     const stock = parseFloat(item.stock);
     if (type === "out" && stock < qty) {
       throw new Error(`Stok tidak cukup. Tersedia: ${stock} ${item.unit}`);
     }
     const newStock = type === "in" ? Math.round((stock + qty) * 100) / 100 : Math.round((stock - qty) * 100) / 100;
-    const { error: e2 } = await sb.from("inventory").update({ stock: newStock }).eq("id", itemId);
+    const { error: e2 } = await sb.from("inventory").update({ stock: newStock }).eq("id", id);
     if (e2) throw e2;
     const txId = generateId("tx");
     const today = new Date().toISOString().slice(0, 10);
     const { error: e3 } = await sb.from("transactions").insert({
       id: txId,
       type,
-      item_id: itemId,
+      item_id: id,
       item_name: item.name,
       quantity: qty,
       unit: item.unit,
@@ -443,22 +451,23 @@ async function addTransaction({ type, itemId, quantity, note, user }) {
     });
     if (e3) throw e3;
     await refreshInventory();
-    return { id: txId, type, itemId, itemName: item.name, quantity: qty, unit: item.unit };
+    return { id: txId, type, itemId: id, itemName: item.name, quantity: qty, unit: item.unit };
   }
 
   if (typeof USE_API !== "undefined" && USE_API) {
-    const res = await apiPost("transaction_add", { type, itemId, quantity, note });
+    const res = await apiPost("transaction_add", { type, itemId: id, quantity, note });
     await refreshInventory();
     return res.data;
   }
 
-  const item = getItemById(itemId);
+  const item = getItemById(id);
   if (!item) throw new Error("Barang tidak ditemukan");
   if (type === "out" && item.stock < qty) {
     throw new Error(`Stok tidak cukup. Tersedia: ${item.stock} ${item.unit}`);
   }
   let items = getJSON(STORAGE_KEYS.inventory, []);
-  const idx = items.findIndex((i) => i.id === itemId);
+  const idx = items.findIndex((i) => i.id === id);
+  if (idx === -1) throw new Error("Barang tidak ditemukan");
   if (type === "in") items[idx].stock = Math.round((items[idx].stock + qty) * 100) / 100;
   else items[idx].stock = Math.round((items[idx].stock - qty) * 100) / 100;
   setJSON(STORAGE_KEYS.inventory, items);
@@ -466,7 +475,7 @@ async function addTransaction({ type, itemId, quantity, note, user }) {
   const tx = {
     id: generateId("tx"),
     type,
-    itemId,
+    itemId: id,
     itemName: item.name,
     quantity: qty,
     unit: item.unit,
