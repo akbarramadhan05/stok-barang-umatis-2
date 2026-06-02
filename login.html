@@ -51,46 +51,162 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/supabase-config.js"></script>
-  <script src="js/supabase-init.js"></script>
-  <script src="js/api-client.js"></script>
-  <script src="js/data.js"></script>
-  <script src="js/auth.js"></script>
+  <script src="js/supabase-env.js?v=8"></script>
+  <script src="js/supabase-config.js?v=8"></script>
+  <script src="js/supabase-init.js?v=8"></script>
   <script>
-    if (getSession()) window.location.href = "dashboard.html";
+    (function () {
+      const SESSION_KEY = "stokbar_session";
+      const DEMO_USERS = [
+        { id: "u1", username: "admin", password: "admin123", name: "Budi Admin", role: "admin" },
+        { id: "u2", username: "owner", password: "owner123", name: "Sari Owner", role: "owner" },
+        { id: "u3", username: "barista", password: "barista123", name: "Andi Barista", role: "barista" },
+      ];
 
-
-    document.getElementById("loginForm").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const username = document.getElementById("username").value.trim();
-      const password = document.getElementById("password").value;
-      const errEl = document.getElementById("loginError");
-      const btn = e.target.querySelector('button[type="submit"]');
-      btn.disabled = true;
-      try {
-        const result = await login(username, password);
-        if (result.success) {
-          if (typeof clearLegacyBrowserCache === "function") clearLegacyBrowserCache();
-          window.location.href = "dashboard.html";
-        } else {
-          errEl.textContent = result.message;
-          errEl.style.display = "flex";
+      function getSession() {
+        try {
+          const raw = sessionStorage.getItem(SESSION_KEY);
+          return raw ? JSON.parse(raw) : null;
+        } catch {
+          return null;
         }
-      } catch (err) {
-        errEl.textContent = err.message || "Gagal login. Pastikan XAMPP (Apache+MySQL) jalan.";
-        errEl.style.display = "flex";
-      } finally {
-        btn.disabled = false;
       }
-    });
 
-    document.querySelectorAll(".demo-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        document.getElementById("username").value = btn.dataset.user;
-        document.getElementById("password").value = btn.dataset.pass;
-        document.getElementById("loginError").style.display = "none";
+      function setSession(user) {
+        const { password, ...safe } = user;
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify(safe));
+      }
+
+      function isSupabaseReady() {
+        const url = normalizeUrl(window.SUPABASE_URL || "");
+        const key = (window.SUPABASE_ANON_KEY || "").trim();
+        window.SUPABASE_URL = url || window.SUPABASE_URL;
+        return (
+          url.length > 10 &&
+          key.length > 20 &&
+          !key.includes("ISI_ANON") &&
+          (key.startsWith("eyJ") || key.startsWith("sb_publishable_"))
+        );
+      }
+
+      function getSupabaseClient() {
+        if (!isSupabaseReady() || !window.supabase) return null;
+        const url = normalizeUrl(window.SUPABASE_URL);
+        return window.supabase.createClient(url, window.SUPABASE_ANON_KEY.trim());
+      }
+
+      function normalizeUrl(url) {
+        try {
+          const u = new URL(String(url).trim().replace(/\/+$/, ""));
+          return u.hostname.includes("supabase.co") ? u.origin : "";
+        } catch {
+          return "";
+        }
+      }
+
+      async function doLogin(username, password) {
+        if (isSupabaseReady()) {
+          const baseUrl = normalizeUrl(window.SUPABASE_URL);
+          const key = (window.SUPABASE_ANON_KEY || "").trim();
+          let user = null;
+          try {
+            const sb = getSupabaseClient();
+            const { data, error } = await sb.rpc("login_user", {
+              p_username: username,
+              p_password: password,
+            });
+            if (error) throw error;
+            user = typeof data === "string" ? JSON.parse(data) : data;
+          } catch (rpcErr) {
+            const headers = {
+              apikey: key,
+              "Content-Type": "application/json",
+            };
+            if (key.startsWith("eyJ")) {
+              headers.Authorization = `Bearer ${key}`;
+            }
+            const res = await fetch(`${baseUrl}/rest/v1/rpc/login_user`, {
+              method: "POST",
+              headers,
+              body: JSON.stringify({ p_username: username, p_password: password }),
+            });
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              throw new Error(body.message || body.error || rpcErr.message || "Login gagal");
+            }
+            user = typeof body === "string" ? JSON.parse(body) : body;
+          }
+          setSession(user);
+          ["stokbar_inventory", "stokbar_transactions", "stokbar_suppliers", "stokbar_users", "stokbar_settings"].forEach(
+            (k) => localStorage.removeItem(k)
+          );
+          return { success: true };
+        }
+        const user = DEMO_USERS.find(
+          (u) => u.username.toLowerCase() === username.toLowerCase() && u.password === password
+        );
+        if (!user) return { success: false, message: "Username atau password salah." };
+        setSession(user);
+        return { success: true };
+      }
+
+      if (getSession()) {
+        window.location.href = "dashboard.html";
+        return;
+      }
+
+      const form = document.getElementById("loginForm");
+      const errEl = document.getElementById("loginError");
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const username = document.getElementById("username").value.trim();
+        const password = document.getElementById("password").value;
+        const btn = form.querySelector('button[type="submit"]');
+        btn.disabled = true;
+        errEl.style.display = "none";
+        try {
+          const result = await doLogin(username, password);
+          if (result.success) {
+            window.location.href = "dashboard.html";
+          } else {
+            errEl.textContent = result.message;
+            errEl.style.display = "flex";
+          }
+        } catch (err) {
+          let msg = err.message || "Gagal login.";
+          const demo = DEMO_USERS.find(
+            (u) =>
+              u.username.toLowerCase() === username.toLowerCase() && u.password === password
+          );
+          if (demo && (msg.includes("Invalid path") || msg.includes("ISI_ANON") || msg.includes("JWT"))) {
+            setSession(demo);
+            window.location.href = "dashboard.html";
+            return;
+          }
+          if (msg.includes("Invalid path")) {
+            msg =
+              "URL Supabase salah di Vercel. SUPABASE_URL harus persis: https://klblycxszklteapdfwyf.supabase.co (tanpa /login atau /rest/v1). Pakai anon key legacy (eyJ...) dari Supabase → Settings → API.";
+          } else if (msg.includes("login_user") || msg.includes("Could not find")) {
+            msg = "Fungsi login belum ada. Jalankan supabase/setup-lengkap.sql di Supabase SQL Editor.";
+          } else if (!isSupabaseReady()) {
+            msg += " (Cek SUPABASE_URL + SUPABASE_ANON_KEY di Vercel → redeploy.)";
+          }
+          errEl.textContent = msg;
+          errEl.style.display = "flex";
+        } finally {
+          btn.disabled = false;
+        }
       });
-    });
+
+      document.querySelectorAll(".demo-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          document.getElementById("username").value = btn.dataset.user;
+          document.getElementById("password").value = btn.dataset.pass;
+          errEl.style.display = "none";
+        });
+      });
+    })();
   </script>
 </body>
 </html>

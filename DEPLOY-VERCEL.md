@@ -1,92 +1,69 @@
-# Cara Share Stokbar Umatis (Vercel & alternatif)
+# Deploy Stokbar Umatis ke Vercel
 
-## Penting: batasan Vercel
+## 1. Siapkan Supabase
 
-| Di XAMPP (lokal) | Di Vercel |
-|------------------|-----------|
-| PHP (`api/index.php`) | Tidak didukung untuk project ini |
-| MySQL (phpMyAdmin) | Perlu database cloud terpisah |
-| Satu link localhost | Link `https://nama-app.vercel.app` |
+1. [supabase.com](https://supabase.com) → buat project
+2. **SQL Editor** → jalankan `supabase/schema.sql`
+3. (Opsional) jalankan `supabase/seed-barang-tambahan.sql`
+4. **Settings → API** → salin:
+   - **Project URL** → `https://xxxxx.supabase.co` (tanpa `/rest/v1/`)
+   - **anon public** key (panjang, diawali `eyJ...`)
 
-**Kesimpulan:** Upload ke Vercel **hanya file HTML/CSS/JS** = tampilan jalan, tapi **login ke MySQL tidak jalan** kecuali API dipindah (Node/Supabase) atau backend di hosting lain.
-
----
-
-## Opsi A — Demo cepat di Vercel (tanpa database bersama)
-
-Cocok: teman lihat tampilan & coba UI. Data **per browser** (localStorage), tidak sinkron antar orang.
-
-1. Buat akun [GitHub](https://github.com) + [Vercel](https://vercel.com)
-2. Push folder proyek ke GitHub (repo public/private)
-3. Vercel → **Add New Project** → import repo
-4. Framework: **Other** (static)
-5. Deploy → dapat link: `https://stokbar-umatis.vercel.app`
-
-**Login demo:** admin / admin123 (data di browser masing-masing, bukan phpMyAdmin).
-
----
-
-## Opsi B — Link share + database bersama (disarankan)
-
-Agar teman pakai **data yang sama** seperti Anda:
-
-### B1. Render.com (paling mirip XAMPP, PHP + MySQL)
-
-1. [render.com](https://render.com) → buat **MySQL** gratis
-2. Import `database/schema.sql` lewat client SQL
-3. Deploy **Web Service** (PHP) — upload project
-4. Dapat URL: `https://stokbar-umatis.onrender.com`
-5. (Opsional) Vercel hanya untuk frontend, API mengarah ke Render
-
-### B2. Vercel (frontend) + Supabase (database)
-
-Perlu ubah `js/data.js` ke Supabase (PostgreSQL). Butuh development tambahan.
-
----
-
-## Opsi C — Vercel + backend terpisah (hybrid)
-
-```
-Teman buka → https://app.vercel.app (HTML/JS)
-                    ↓
-              API di Render / Railway
-                    ↓
-              MySQL cloud (PlanetScale / Render DB)
-```
-
-Langkah ringkas:
-1. Deploy API+DB di **Render** atau **Railway**
-2. Di Vercel set environment variable: `VITE_API_URL` atau edit `js/api-client.js`
-3. Deploy static files ke Vercel
-
----
-
-## Deploy ke Vercel (langkah GitHub)
+## 2. Push ke GitHub
 
 ```bash
 cd stok-barang-umatis
-git init
 git add .
-git commit -m "Stokbar Umatis"
-git remote add origin https://github.com/USERNAME/stokbar-umatis.git
-git push -u origin main
+git commit -m "Deploy Vercel + Supabase"
+git push origin main
 ```
 
-Di Vercel: Import repo → Deploy (file `vercel.json` sudah disiapkan).
+Repo Anda: `https://github.com/akbarramadhan05/stok-barang-umatis-2`
 
----
+## 3. Import ke Vercel
 
-## Ringkas pilihan
+1. Buka [vercel.com](https://vercel.com) → login dengan GitHub
+2. **Add New Project** → pilih repo `stok-barang-umatis-2`
+3. Framework: **Other**
+4. **Environment Variables** — tambahkan:
 
-| Kebutuhan | Platform |
-|-----------|----------|
-| Link cepat, demo UI saja | **Vercel** (Opsi A) |
-| Teman pakai data sama + PHP | **Render** (Opsi B1) |
-| Mau tetap pakai Vercel + DB cloud | **Vercel + Supabase** (perlu coding ulang API) |
+| Name | Value |
+|------|--------|
+| `SUPABASE_URL` | `https://klblycxszklteapdfwyf.supabase.co` |
+| `SUPABASE_ANON_KEY` | anon public key dari Supabase |
 
----
+5. Klik **Deploy**
 
-## Setelah deploy
+## 4. Link website Anda
 
-- Ganti password demo (`admin123`) di database production
-- Jangan commit `api/config.php` dengan password asli (sudah di `.gitignore`)
+Setelah deploy selesai:
+
+```
+https://stokbar-umatis-2.vercel.app
+```
+
+atau nama custom dari Vercel (lihat di dashboard **Domains**).
+
+Login: `http://localhost/...` diganti dengan link Vercel + `/login.html`
+
+## 5. Tes
+
+- Buka link Vercel → halaman login
+- Login: `admin` / `admin123`
+- Banner hijau: **Terhubung ke Supabase Cloud**
+
+## Lokal vs Vercel
+
+| | Lokal (XAMPP) | Vercel |
+|--|---------------|--------|
+| Config | `js/supabase-config.js` manual | Env vars → auto generate saat build |
+| File config di Git | Di-ignore (aman) | Tidak perlu commit key |
+
+## Troubleshooting
+
+| Masalah | Solusi |
+|---------|--------|
+| Login gagal | Cek env `SUPABASE_URL` & `SUPABASE_ANON_KEY` di Vercel → Redeploy |
+| URL salah | Jangan pakai `/rest/v1/` di akhir URL |
+| Key salah | Pakai **anon public**, bukan service_role / secret |
+| Data kosong | Import `schema.sql` di Supabase |

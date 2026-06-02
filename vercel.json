@@ -1,7 +1,7 @@
 {
   "version": 2,
   "name": "stokbar-umatis",
-  "buildCommand": null,
+  "buildCommand": "npm run build",
   "outputDirectory": ".",
   "cleanUrls": true,
   "trailingSlash": false,
@@ -15,5 +15,9 @@
   ],
   "rewrites": [
     { "source": "/", "destination": "/login.html" }
+  ],
+  "redirects": [
+    { "source": "/js/data.js", "destination": "/js/stokbar-data.js", "permanent": false },
+    { "source": "/js/auth.js", "destination": "/js/stokbar-auth.js", "permanent": false }
   ]
 }

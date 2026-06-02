@@ -7,8 +7,7 @@
 const API_URL = window.STOKBAR_API_URL || 'api/index.php';
 
 const USE_API =
-  typeof USE_SUPABASE !== 'undefined' &&
-  !USE_SUPABASE &&
+  (typeof USE_SUPABASE === 'undefined' || !USE_SUPABASE) &&
   window.location.protocol !== 'file:' &&
   !window.STOKBAR_FORCE_LOCAL &&
   (window.STOKBAR_API_URL || !window.location.hostname.endsWith('.vercel.app'));

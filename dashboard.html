@@ -23,7 +23,10 @@
       </header>
 
       <div class="page-content">
-        <div class="stats-grid" id="statsGrid"></div>
+        <div id="bootError" class="alert alert-danger" style="display:none;margin-bottom:1rem" role="alert"></div>
+        <div class="stats-grid" id="statsGrid">
+          <p id="loadingMsg" style="grid-column:1/-1;color:var(--color-text-muted);padding:1rem">Memuat data...</p>
+        </div>
 
         <div id="lowStockAlert"></div>
 
@@ -72,20 +75,36 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/supabase-config.js"></script>
-  <script src="js/supabase-init.js"></script>
-  <script src="js/api-client.js"></script>
-  <script src="js/data.js"></script>
-  <script src="js/auth.js"></script>
-  <script src="js/app.js"></script>
-  <script src="js/charts.js"></script>
+  <script src="js/supabase-env.js?v=8"></script>
+  <script src="js/supabase-config.js?v=8"></script>
+  <script src="js/supabase-init.js?v=8"></script>
+  <script src="js/api-client.js?v=8"></script>
+  <script src="js/stokbar-data.js?v=8"></script>
+  <script src="js/stokbar-auth.js?v=8"></script>
+  <script src="js/app.js?v=8"></script>
+  <script src="js/charts.js?v=8"></script>
   <script>
     (async () => {
+    const bootErr = document.getElementById("bootError");
+    const showBootErr = (msg) => {
+      if (bootErr) {
+        bootErr.textContent = msg;
+        bootErr.style.display = "flex";
+      }
+      if (typeof showToast === "function") showToast(msg, "error");
+    };
+
+    if (typeof initLayout !== "function" || typeof refreshInventory !== "function") {
+      showBootErr(
+        "Script aplikasi gagal dimuat. Hard refresh Ctrl+Shift+R, atau redeploy Vercel dari repo terbaru."
+      );
+      return;
+    }
+
     const session = initLayout("dashboard.html", "Dashboard");
     if (!session) return;
-    try {
-      await Promise.all([refreshInventory(), refreshTransactions({ limit: 200 })]);
-    } catch (e) { showDataError(e); return; }
+
+    document.getElementById("loadingMsg")?.remove();
 
     function renderDashboard() {
       const inventory = getInventory();
@@ -154,7 +173,12 @@
           .join("");
       }
 
-      renderInOutChart("mainChart");
+      try {
+        if (typeof renderInOutChart === "function") renderInOutChart("mainChart");
+      } catch (chartErr) {
+        document.getElementById("mainChart").innerHTML =
+          '<p style="color:var(--color-text-muted);font-size:0.875rem">Grafik tidak dapat dimuat.</p>';
+      }
 
       const recent = txs.slice(0, 8);
       document.getElementById("recentTxBody").innerHTML =
@@ -183,6 +207,35 @@
     }
 
     renderDashboard();
+
+    try {
+      await Promise.race([
+        Promise.all([
+          refreshInventory().catch((e) => {
+            console.warn("inventory", e);
+            showBootErr("Gagal memuat barang: " + e.message);
+            return [];
+          }),
+          refreshTransactions({ limit: 200 }).catch((e) => {
+            console.warn("transactions", e);
+            return [];
+          }),
+        ]),
+        new Promise((resolve) => setTimeout(resolve, 14000)),
+      ]);
+      renderDashboard();
+      if (getInventory().length === 0) {
+        showBootErr(
+          "Belum ada barang di database. Jalankan supabase/isi-semua-barang.sql di Supabase, lalu klik ↻ Muat ulang di banner hijau/kuning atas."
+        );
+      }
+    } catch (e) {
+      showDataError(e);
+      showBootErr("Gagal memuat database: " + (e.message || e));
+      renderDashboard();
+    }
+
+    window.addEventListener("stokbar:data-reloaded", () => renderDashboard());
     })();
   </script>
 </body>

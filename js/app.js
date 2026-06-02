@@ -79,34 +79,65 @@ function renderSidebar(activePage) {
 }
 
 async function showDbStatusBanner() {
-  if (!USE_SUPABASE && (typeof USE_API === "undefined" || !USE_API)) return;
   let el = document.getElementById("dbStatusBanner");
   if (!el) {
     el = document.createElement("div");
     el.id = "dbStatusBanner";
     el.style.cssText =
-      "padding:0.5rem 1rem;font-size:0.8rem;font-weight:600;text-align:center;border-bottom:1px solid var(--color-border)";
+      "padding:0.5rem 1rem;font-size:0.8rem;font-weight:600;text-align:center;border-bottom:1px solid var(--color-border);display:flex;align-items:center;justify-content:center;gap:0.75rem;flex-wrap:wrap";
     const header = document.querySelector(".top-header");
     if (header) header.after(el);
   }
+
+  const localMode = !USE_SUPABASE && (typeof USE_API === "undefined" || !USE_API);
+  if (localMode) {
+    el.style.background = "#fef3c7";
+    el.style.color = "#92400e";
+    el.innerHTML =
+      '⚠️ Mode <strong>LOKAL</strong> (browser) — perubahan di Supabase tidak tampil. Isi <code>SUPABASE_ANON_KEY</code> di Vercel lalu redeploy. ' +
+      '<button type="button" class="btn btn-ghost btn-sm" id="btnReloadDb">Muat ulang</button>';
+    document.getElementById("btnReloadDb")?.addEventListener("click", () => window.location.reload());
+    return;
+  }
+
   try {
     if (USE_SUPABASE) {
       await testSupabaseConnection();
+      let n = getInventory().length;
+      try {
+        if (n === 0) await refreshInventory();
+        n = getInventory().length;
+      } catch (refreshErr) {
+        el.style.background = "var(--color-danger-bg)";
+        el.style.color = "#991b1b";
+        el.textContent = "Supabase: " + (refreshErr.message || "gagal memuat barang");
+        return;
+      }
       el.style.background = "var(--color-success-bg)";
       el.style.color = "#166534";
-      el.textContent = "Terhubung ke Supabase Cloud";
+      el.innerHTML = `✅ Supabase — ${n} barang dimuat dari database ` +
+        '<button type="button" class="btn btn-ghost btn-sm" id="btnReloadDb">↻ Muat ulang</button>';
     } else {
       await apiGet("ping");
       el.style.background = "var(--color-success-bg)";
       el.style.color = "#166534";
       el.textContent = "Terhubung ke MySQL (XAMPP)";
     }
-  } catch {
+    document.getElementById("btnReloadDb")?.addEventListener("click", async () => {
+      try {
+        await forceReloadFromDatabase();
+        showToast(`Data diperbarui (${getInventory().length} barang)`);
+        window.dispatchEvent(new CustomEvent("stokbar:data-reloaded"));
+      } catch (e) {
+        showToast(e.message, "error");
+      }
+    });
+  } catch (e) {
     el.style.background = "var(--color-danger-bg)";
     el.style.color = "#991b1b";
     el.textContent = USE_SUPABASE
-      ? "Supabase belum dikonfigurasi — isi js/supabase-config.js"
-      : "Database tidak terhubung — cek XAMPP / SYNC-KE-XAMPP.bat";
+      ? "Supabase error: " + (e.message || "cek API key di Vercel")
+      : "Database tidak terhubung — cek XAMPP";
   }
 }
 
@@ -174,6 +205,91 @@ function waLink(phone, message) {
   const num = phone.replace(/\D/g, "");
   const text = encodeURIComponent(message || "Halo, saya ingin menanyakan ketersediaan stok.");
   return `https://wa.me/${num}?text=${text}`;
+}
+
+/**
+ * Dropdown + daftar klik untuk pilih barang (transaksi masuk/keluar)
+ */
+function setupTransactionItemPicker({ pickerId, selectId, hiddenId, hintId, onSelect }) {
+  let selectedId = null;
+  const pickerEl = document.getElementById(pickerId);
+  const selectEl = document.getElementById(selectId);
+  const hiddenEl = document.getElementById(hiddenId);
+  const hintEl = hintId ? document.getElementById(hintId) : null;
+
+  function setSelected(id, unit) {
+    selectedId = id;
+    if (hiddenEl) hiddenEl.value = id || "";
+    if (selectEl && id) selectEl.value = id;
+    if (hintEl && unit) hintEl.textContent = `Satuan: ${unit}`;
+    if (pickerEl) {
+      pickerEl.querySelectorAll(".item-option").forEach((o) => {
+        o.classList.toggle("selected", o.dataset.id === id);
+      });
+    }
+    if (onSelect) onSelect(id, unit);
+  }
+
+  function render() {
+    const items = getInventory();
+    if (selectedId && !items.some((i) => i.id === selectedId)) {
+      setSelected("", "");
+    }
+    if (selectEl) {
+      selectEl.innerHTML =
+        '<option value="">— Pilih barang —</option>' +
+        items
+          .map(
+            (i) =>
+              `<option value="${escapeHtml(i.id)}">${escapeHtml(i.name)} (${formatStock(i.stock, i.unit)})</option>`
+          )
+          .join("");
+      if (selectedId) selectEl.value = selectedId;
+    }
+    if (pickerEl) {
+      if (!items.length) {
+        pickerEl.innerHTML =
+          '<p style="color:var(--color-text-muted);font-size:0.875rem;padding:0.5rem">Belum ada barang. Admin: tambah di Katalog Barang dulu.</p>';
+        return;
+      }
+      pickerEl.innerHTML = items
+        .map(
+          (i) => `
+        <div class="item-option ${selectedId === i.id ? "selected" : ""}" data-id="${escapeHtml(i.id)}" data-unit="${escapeHtml(i.unit)}">
+          <span><strong>${escapeHtml(i.name)}</strong><br><small>${escapeHtml(i.category)}</small></span>
+          <span class="stock-qty">Stok: ${formatStock(i.stock, i.unit)}</span>
+        </div>`
+        )
+        .join("");
+      pickerEl.querySelectorAll(".item-option").forEach((el) => {
+        el.addEventListener("click", () => setSelected(el.dataset.id, el.dataset.unit));
+      });
+    }
+  }
+
+  if (selectEl) {
+    selectEl.addEventListener("change", () => {
+      const opt = selectEl.options[selectEl.selectedIndex];
+      if (!selectEl.value) {
+        setSelected("", "");
+        return;
+      }
+      const item = getItemById(selectEl.value);
+      setSelected(selectEl.value, item?.unit || "");
+    });
+  }
+
+  render();
+  return {
+    render,
+    getSelectedId: () => {
+      const fromHidden = (hiddenEl?.value || "").trim();
+      const fromSelect = (selectEl?.value || "").trim();
+      const fromState = (selectedId || "").trim();
+      return fromSelect || fromHidden || fromState;
+    },
+    clearSelection: () => setSelected("", ""),
+  };
 }
 
 function openModal(id) {

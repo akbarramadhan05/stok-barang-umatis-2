@@ -2,6 +2,50 @@
  * Stokbar Umatis — Authentication
  */
 
+/* Fallback jika data.js / storage.js gagal dimuat (mis. deploy Vercel belum lengkap) */
+if (typeof STORAGE_KEYS === "undefined") {
+  var STORAGE_KEYS = {
+    users: "stokbar_users",
+    session: "stokbar_session",
+    inventory: "stokbar_inventory",
+    transactions: "stokbar_transactions",
+    suppliers: "stokbar_suppliers",
+    settings: "stokbar_settings",
+  };
+}
+if (typeof getJSON === "undefined") {
+  function getJSON(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+}
+if (typeof ROLES === "undefined") {
+  var ROLES = { ADMIN: "admin", OWNER: "owner", BARISTA: "barista" };
+}
+if (typeof DEFAULT_USERS === "undefined") {
+  var DEFAULT_USERS = [
+    { id: "u1", username: "admin", password: "admin123", name: "Budi Admin", role: "admin" },
+    { id: "u2", username: "owner", password: "owner123", name: "Sari Owner", role: "owner" },
+    { id: "u3", username: "barista", password: "barista123", name: "Andi Barista", role: "barista" },
+  ];
+}
+if (typeof USE_SUPABASE === "undefined") {
+  var USE_SUPABASE = false;
+}
+if (typeof clearLegacyBrowserCache === "undefined") {
+  function clearLegacyBrowserCache() {
+    if (typeof USE_SUPABASE !== "undefined" && USE_SUPABASE) {
+      ["stokbar_inventory", "stokbar_transactions", "stokbar_suppliers", "stokbar_users", "stokbar_settings"].forEach(
+        (k) => localStorage.removeItem(k)
+      );
+    }
+  }
+}
+
 const PAGE_PERMISSIONS = {
   "dashboard.html": [ROLES.ADMIN, ROLES.OWNER, ROLES.BARISTA],
   "inventory.html": [ROLES.ADMIN, ROLES.OWNER, ROLES.BARISTA],
