@@ -2,7 +2,7 @@
  * Stokbar Umatis — Data layer (Supabase / fallback localStorage)
  */
 
-const STORAGE_KEYS = {
+const STORAGE_KEYS = window.STORAGE_KEYS || {
   users: "stokbar_users",
   session: "stokbar_session",
   inventory: "stokbar_inventory",
@@ -10,8 +10,12 @@ const STORAGE_KEYS = {
   suppliers: "stokbar_suppliers",
   settings: "stokbar_settings",
 };
+window.STORAGE_KEYS = STORAGE_KEYS;
 
 function getJSON(key, fallback) {
+  if (typeof window.getJSON === "function" && window.getJSON !== getJSON) {
+    return window.getJSON(key, fallback);
+  }
   try {
     const raw = localStorage.getItem(key);
     return raw ? JSON.parse(raw) : fallback;
@@ -19,10 +23,15 @@ function getJSON(key, fallback) {
     return fallback;
   }
 }
+window.getJSON = getJSON;
 
 function setJSON(key, value) {
+  if (typeof window.setJSON === "function" && window.setJSON !== setJSON) {
+    return window.setJSON(key, value);
+  }
   localStorage.setItem(key, JSON.stringify(value));
 }
+window.setJSON = setJSON;
 
 function fetchWithTimeout(promise, ms, label) {
   return Promise.race([
