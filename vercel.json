@@ -1,7 +1,7 @@
 {
   "version": 2,
   "name": "stokbar-umatis",
-  "buildCommand": null,
+  "buildCommand": "npm run build",
   "outputDirectory": ".",
   "cleanUrls": true,
   "trailingSlash": false,
