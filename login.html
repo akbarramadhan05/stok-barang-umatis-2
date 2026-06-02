@@ -53,6 +53,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/supabase-init.js"></script>
+  <script src="js/storage.js"></script>
   <script src="js/api-client.js"></script>
   <script src="js/data.js"></script>
   <script src="js/auth.js"></script>
@@ -77,7 +78,13 @@
           errEl.style.display = "flex";
         }
       } catch (err) {
-        errEl.textContent = err.message || "Gagal login. Pastikan XAMPP (Apache+MySQL) jalan.";
+        let msg = err.message || "Gagal login.";
+        if (msg.includes("getJSON")) {
+          msg = "File JS belum ter-update di server. Deploy ulang dari GitHub (pastikan js/data.js & js/storage.js ikut ter-push).";
+        } else if (typeof USE_SUPABASE !== "undefined" && !USE_SUPABASE) {
+          msg += " Supabase belum dikonfigurasi — isi SUPABASE_ANON_KEY di Vercel → Settings → Environment Variables.";
+        }
+        errEl.textContent = msg;
         errEl.style.display = "flex";
       } finally {
         btn.disabled = false;

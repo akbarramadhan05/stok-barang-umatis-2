@@ -11,6 +11,19 @@ const STORAGE_KEYS = {
   settings: "stokbar_settings",
 };
 
+function getJSON(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function setJSON(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
 const ROLES = { ADMIN: "admin", OWNER: "owner", BARISTA: "barista" };
 
 const ROLE_LABELS = { admin: "Admin", owner: "Owner", barista: "Tim Barista" };
@@ -27,21 +40,61 @@ const DEFAULT_USERS = [
   { id: "u3", username: "barista", password: "barista123", name: "Andi Barista", role: ROLES.BARISTA },
 ];
 
+/** Katalog barang default (42 item) — dipakai localStorage & fallback */
+const DEFAULT_INVENTORY = [
+  { id: "i1", sku: "KOP-001", name: "Arabica Gayo", category: "Biji Kopi", description: "Biji Arabica origin Gayo", stock: 8.5, unit: "kg", minStock: 3, isActive: true },
+  { id: "i2", sku: "KOP-002", name: "Robusta Lampung", category: "Biji Kopi", description: "Biji Robusta", stock: 12, unit: "kg", minStock: 5, isActive: true },
+  { id: "i3", sku: "KOP-003", name: "Espresso Blend House", category: "Biji Kopi", description: "Blend espresso signature", stock: 15, unit: "kg", minStock: 5, isActive: true },
+  { id: "i4", sku: "KOP-004", name: "Decaf Colombia", category: "Biji Kopi", description: "Biji tanpa kafein", stock: 4, unit: "kg", minStock: 2, isActive: true },
+  { id: "i5", sku: "KOP-005", name: "Kopi Toraja", category: "Biji Kopi", description: "Single origin Toraja", stock: 6, unit: "kg", minStock: 3, isActive: true },
+  { id: "i6", sku: "KOP-006", name: "Cold Brew Concentrate", category: "Biji Kopi", description: "Bahan cold brew", stock: 8, unit: "liter", minStock: 4, isActive: true },
+  { id: "i7", sku: "SUS-001", name: "Susu UHT Full Cream", category: "Susu", description: "Susu UHT untuk latte", stock: 24, unit: "liter", minStock: 10, isActive: true },
+  { id: "i8", sku: "SUS-002", name: "Susu Oat", category: "Susu", description: "Susu oat", stock: 6, unit: "liter", minStock: 8, isActive: true },
+  { id: "i9", sku: "SUS-003", name: "Susu Almond", category: "Susu", description: "Non-dairy almond", stock: 10, unit: "liter", minStock: 5, isActive: true },
+  { id: "i10", sku: "SUS-004", name: "Susu Soy", category: "Susu", description: "Susu kedelai", stock: 8, unit: "liter", minStock: 4, isActive: true },
+  { id: "i11", sku: "SUS-005", name: "Whipped Cream Spray", category: "Susu", description: "Krim topping", stock: 12, unit: "pcs", minStock: 6, isActive: true },
+  { id: "i12", sku: "SUS-006", name: "Fresh Milk 1L", category: "Susu", description: "Susu segar harian", stock: 18, unit: "liter", minStock: 8, isActive: true },
+  { id: "i13", sku: "SIR-001", name: "Sirup Vanilla", category: "Sirup", description: "Rasa vanilla", stock: 2.5, unit: "liter", minStock: 2, isActive: true },
+  { id: "i14", sku: "SIR-002", name: "Sirup Caramel", category: "Sirup", description: "Rasa caramel", stock: 1.8, unit: "liter", minStock: 2, isActive: true },
+  { id: "i15", sku: "SIR-003", name: "Sirup Hazelnut", category: "Sirup", description: "Rasa hazelnut", stock: 3, unit: "liter", minStock: 2, isActive: true },
+  { id: "i16", sku: "SIR-004", name: "Sirup Pandan", category: "Sirup", description: "Rasa pandan", stock: 2.2, unit: "liter", minStock: 2, isActive: true },
+  { id: "i17", sku: "SIR-005", name: "Sirup Chocolate", category: "Sirup", description: "Untuk mocha", stock: 4, unit: "liter", minStock: 2, isActive: true },
+  { id: "i18", sku: "SIR-006", name: "Sirup Matcha", category: "Sirup", description: "Matcha latte", stock: 1.5, unit: "liter", minStock: 2, isActive: true },
+  { id: "i19", sku: "CUP-001", name: "Cup Hot 8oz", category: "Cup & Kemasan", description: "Cup kertas hot 8oz", stock: 450, unit: "pcs", minStock: 200, isActive: true },
+  { id: "i20", sku: "CUP-002", name: "Cup Iced 16oz", category: "Cup & Kemasan", description: "Cup iced 16oz", stock: 180, unit: "pcs", minStock: 150, isActive: true },
+  { id: "i21", sku: "CUP-003", name: "Cup Hot 12oz", category: "Cup & Kemasan", description: "Cup hot besar", stock: 320, unit: "pcs", minStock: 150, isActive: true },
+  { id: "i22", sku: "CUP-004", name: "Cup Iced 22oz", category: "Cup & Kemasan", description: "Cup iced jumbo", stock: 200, unit: "pcs", minStock: 100, isActive: true },
+  { id: "i23", sku: "CUP-005", name: "Tutup Cup Hitam", category: "Cup & Kemasan", description: "Tutup dome & flat", stock: 600, unit: "pcs", minStock: 250, isActive: true },
+  { id: "i24", sku: "CUP-006", name: "Sedotan Paper", category: "Cup & Kemasan", description: "Sedotan kertas", stock: 800, unit: "pcs", minStock: 300, isActive: true },
+  { id: "i25", sku: "CUP-007", name: "Paper Bag Take Away", category: "Cup & Kemasan", description: "Kantong take away", stock: 150, unit: "pcs", minStock: 50, isActive: true },
+  { id: "i26", sku: "CUP-008", name: "Sleeve Cup", category: "Cup & Kemasan", description: "Pelindung panas", stock: 400, unit: "pcs", minStock: 150, isActive: true },
+  { id: "i27", sku: "BHN-001", name: "Gula Aren Cair", category: "Bahan Pendukung", description: "Pemanis gula aren", stock: 4, unit: "liter", minStock: 3, isActive: true },
+  { id: "i28", sku: "BHN-002", name: "Gula Pasir", category: "Bahan Pendukung", description: "Gula station", stock: 10, unit: "kg", minStock: 3, isActive: true },
+  { id: "i29", sku: "BHN-003", name: "Cokelat Bubuk", category: "Bahan Pendukung", description: "Cocoa powder", stock: 5, unit: "kg", minStock: 2, isActive: true },
+  { id: "i30", sku: "BHN-004", name: "Teh Celup Earl Grey", category: "Bahan Pendukung", description: "Teh premium", stock: 120, unit: "pcs", minStock: 40, isActive: true },
+  { id: "i31", sku: "BHN-005", name: "Teh Celup Chamomile", category: "Bahan Pendukung", description: "Teh herbal", stock: 80, unit: "pcs", minStock: 30, isActive: true },
+  { id: "i32", sku: "BHN-006", name: "Air Mineral Galon", category: "Bahan Pendukung", description: "Air mesin kopi", stock: 8, unit: "pcs", minStock: 3, isActive: true },
+  { id: "i33", sku: "BHN-007", name: "Es Batu Kemasan", category: "Bahan Pendukung", description: "Bahan iced", stock: 25, unit: "kg", minStock: 10, isActive: true },
+  { id: "i34", sku: "BHN-008", name: "Salted Caramel Sauce", category: "Bahan Pendukung", description: "Saus topping", stock: 3, unit: "liter", minStock: 1.5, isActive: true },
+  { id: "i35", sku: "BHN-009", name: "Matcha Powder", category: "Bahan Pendukung", description: "Serbuk matcha", stock: 2, unit: "kg", minStock: 1, isActive: true },
+  { id: "i36", sku: "SNK-001", name: "Croissant Frozen", category: "Snack", description: "Pastry beku", stock: 35, unit: "pcs", minStock: 20, isActive: true },
+  { id: "i37", sku: "SNK-002", name: "Banana Bread Slice", category: "Snack", description: "Roti pisang", stock: 28, unit: "pcs", minStock: 15, isActive: true },
+  { id: "i38", sku: "SNK-003", name: "Cookies Choco Chip", category: "Snack", description: "Kue kering", stock: 45, unit: "pcs", minStock: 20, isActive: true },
+  { id: "i39", sku: "SNK-004", name: "Waffle Frozen", category: "Snack", description: "Waffle beku", stock: 22, unit: "pcs", minStock: 12, isActive: true },
+  { id: "i40", sku: "SNK-005", name: "Granola Bar", category: "Snack", description: "Snack healthy", stock: 36, unit: "pcs", minStock: 15, isActive: true },
+  { id: "i41", sku: "SNK-006", name: "Sandwich Tuna Frozen", category: "Snack", description: "Sandwich dingin", stock: 18, unit: "pcs", minStock: 10, isActive: true },
+  { id: "i42", sku: "SNK-007", name: "Brownies Potong", category: "Snack", description: "Brownies display", stock: 24, unit: "pcs", minStock: 12, isActive: true },
+];
+
+const DEFAULT_SUPPLIERS = [
+  { id: "s1", name: "Kopi Nusantara Co.", phone: "6281234567890", email: "order@kopinusantara.id", address: "Jl. Raya Kopi No. 12, Bandung", categories: ["Biji Kopi"], notes: "Pengiriman Senin & Kamis" },
+  { id: "s2", name: "Dairy Fresh Supply", phone: "6289876543210", email: "sales@dairyfresh.co.id", address: "Kawasan Industri Cikarang", categories: ["Susu"], notes: "Minimal order 20 liter" },
+  { id: "s3", name: "Syrup House Indonesia", phone: "6281122334455", email: "hello@syruphouse.id", address: "Surabaya", categories: ["Sirup", "Bahan Pendukung"], notes: "" },
+  { id: "s4", name: "PackPro Kemasan", phone: "6285566778899", email: "info@packpro.id", address: "Tangerang Selatan", categories: ["Cup & Kemasan"], notes: "Stok cup sering ready" },
+];
+
 function generateId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-}
-
-function getJSON(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function setJSON(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
 }
 
 function rowToInventory(r) {
@@ -117,8 +170,8 @@ function settingsToObject(rows) {
 
 function initLocalData() {
   if (!localStorage.getItem(STORAGE_KEYS.users)) setJSON(STORAGE_KEYS.users, DEFAULT_USERS);
-  if (!localStorage.getItem(STORAGE_KEYS.inventory)) setJSON(STORAGE_KEYS.inventory, []);
-  if (!localStorage.getItem(STORAGE_KEYS.suppliers)) setJSON(STORAGE_KEYS.suppliers, []);
+  if (!localStorage.getItem(STORAGE_KEYS.inventory)) setJSON(STORAGE_KEYS.inventory, DEFAULT_INVENTORY);
+  if (!localStorage.getItem(STORAGE_KEYS.suppliers)) setJSON(STORAGE_KEYS.suppliers, DEFAULT_SUPPLIERS);
   if (!localStorage.getItem(STORAGE_KEYS.transactions)) setJSON(STORAGE_KEYS.transactions, []);
   if (!localStorage.getItem(STORAGE_KEYS.settings)) {
     setJSON(STORAGE_KEYS.settings, { cafeName: "Stokbar Umatis", lowStockNotify: true, currency: "IDR" });
@@ -139,7 +192,12 @@ async function refreshInventory() {
     DataCache.inventory = res.data || [];
     return DataCache.inventory;
   }
-  DataCache.inventory = getJSON(STORAGE_KEYS.inventory, []);
+  let items = getJSON(STORAGE_KEYS.inventory, null);
+  if (!items || items.length === 0) {
+    items = DEFAULT_INVENTORY;
+    setJSON(STORAGE_KEYS.inventory, items);
+  }
+  DataCache.inventory = items;
   return DataCache.inventory;
 }
 
@@ -543,11 +601,18 @@ async function ensureInventoryLoaded() {
   await refreshInventory();
   if (!USE_SUPABASE && DataCache.inventory.length === 0) {
     initLocalData();
-    DataCache.inventory = getJSON(STORAGE_KEYS.inventory, []);
+    DataCache.inventory = getJSON(STORAGE_KEYS.inventory, DEFAULT_INVENTORY);
   }
   return DataCache.inventory;
 }
 
-if (!USE_SUPABASE && (typeof USE_API === "undefined" || !USE_API)) {
+/** Muat ulang katalog default ke localStorage (reset barang demo) */
+function resetLocalInventoryToDefault() {
+  setJSON(STORAGE_KEYS.inventory, DEFAULT_INVENTORY);
+  DataCache.inventory = [...DEFAULT_INVENTORY];
+  return DataCache.inventory;
+}
+
+if ((typeof USE_SUPABASE === "undefined" || !USE_SUPABASE) && (typeof USE_API === "undefined" || !USE_API)) {
   initLocalData();
 }

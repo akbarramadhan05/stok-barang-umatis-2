@@ -14,8 +14,8 @@ if (!url || !key) {
 const content = `/**
  * Auto-generated saat deploy Vercel — jangan edit manual di production
  */
-window.SUPABASE_URL = ${JSON.stringify(url || "https://XXXXXXXX.supabase.co")};
-window.SUPABASE_ANON_KEY = ${JSON.stringify(key || "ISI_ANON_KEY")};
+window.SUPABASE_URL = ${JSON.stringify(url || "https://klblycxszklteapdfwyf.supabase.co")};
+window.SUPABASE_ANON_KEY = ${JSON.stringify(key || "ISI_ANON_PUBLIC_KEY_DARI_SUPABASE")};
 `;
 
 const out = path.join(__dirname, "..", "js", "supabase-config.js");
